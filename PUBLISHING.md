@@ -51,7 +51,7 @@ gh --version                                     # command not found → 没有 
 3. 复制令牌，push 时把令牌当密码：
 
 ```bash
-git remote add origin https://github.com/poker/dsh-composer-studio.git
+git remote add origin https://github.com/pokereva/dsh-composer-studio.git
 git push -u origin main
 # Username: poker
 # Password: <粘贴 PAT，不是账号密码>
@@ -87,13 +87,13 @@ git push -u origin main
 插件市场与 `dsh plugin add` 都支持直接装 tgz：
 
 ```bash
-npm pack                            # 产出 dsh-composer-studio-2.0.0.tgz
+npm pack                            # 产出 dsh-composer-studio-2.3.0.tgz
 ```
 
-把 tgz 传到 <https://github.com/poker/dsh-composer-studio/releases/new>，tag 写 `v2.0.0`。别人就能这样装：
+把 tgz 传到 <https://github.com/pokereva/dsh-composer-studio/releases/new>，tag 写 `v2.3.0`。别人就能这样装：
 
 ```bash
-dsh plugin --profile <profile> add https://github.com/poker/dsh-composer-studio/releases/download/v2.0.0/dsh-composer-studio-2.0.0.tgz
+dsh plugin --profile <profile> add https://github.com/pokereva/dsh-composer-studio/releases/download/v2.3.0/dsh-composer-studio-2.3.0.tgz
 ```
 
 或直接从源码装：

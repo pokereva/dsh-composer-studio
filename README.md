@@ -51,11 +51,13 @@ Markdown 模式下插件把卡片撑开：画布高度抬到 `--dcs-canvas`（�
 - **没在打字**：渲染层铺满，看到的是排版好的 Markdown。
 - **点一下就编辑**：渲染层让开，露出 DSH 原来那个 contenteditable，光标、选区、撤销栈、`/` 命令、`@` 提及全是原生的；改完点外面又回到渲染。
 
-焦点进出输入框就是这两态的开关，不用记快捷键。右上角三颗按钮：`预览` / `编辑` / `收起沉浸`；`收起沉浸` 只关掉放大效果，Markdown 模式本身还在。
+焦点进出输入框就是这两态的开关，不用记快捷键。右上角三颗按钮：`预览` / `编辑` / `收起沉浸`；`收起沉浸` 直接把模式切回 `默认`，画布收起来。
 
 **拖动顶边改高度**：把鼠标移到画布上边缘（光标变成上下箭头），按住拖动即可，范围 160 – 760 px。拖动过程只改 CSS 变量，松手才落盘，所以跟手不卡；高度存在 `canvas` 字段里，下次进来照旧。
 
 放大只做两件事：给 `<body>` 加 `dcs-immersive` 类名，以及把卡片上的 `--dsh-composer-text-max-height` 指向 `--dcs-canvas`。不碰内核任何哈希类名。
+
+> 沉浸画布没有独立开关：**Markdown 模式本身即画布**。切到 Markdown 就展开、切回默认就收起。
 
 渲染支持标题、引用、代码块、分隔线、有序 / 无序 / 任务列表、加粗 / 斜体 / 行内代码 / 链接（只放行 `http(s)`）。
 
@@ -101,19 +103,19 @@ state.actions.insertText('## ', span);              // draftRev 不匹配就返�
 | 按键映射 | 「发送消息」「插入换行」两行，各带 *录制 / 清除 / 取消* |
 | 行为 | 「屏蔽所有键盘发送」：连 `Ctrl / Cmd + Enter` 也换成换行 |
 | Markdown 输入辅助 | 上面那张按键表的只读说明 |
-| 沉浸编辑窗 | 开关；只有 Markdown 模式才会展开。展开后可拖动画布顶边调整高度（160 – 760 px），高度也会保存 |
+| 沉浸编辑窗 | 说明 Markdown 模式即画布（无独立开关）；展开后可拖动画布顶边调整高度（160 – 760 px），高度也会保存，另有「恢复默认高度」按钮 |
 
 录制时按 Esc 取消，纯修饰键会被忽略，两个动作不能共用同一组合键。
 
 配置存在 `localStorage['dsh.composer-studio.v1']`，落盘形状：
 
 ```json
-{ "enabled": true, "mode": "markdown", "immersive": true, "canvas": 340,
+{ "enabled": true, "mode": "markdown", "canvas": 340,
   "bindings": { "newline": { "code": "Enter", "shift": false, "...": "..." }, "send": null },
   "blockKeyboardSend": true }
 ```
 
-`send: null` 表示「没有键盘发送，只能点击」；`immersive: false` 表示 Markdown 模式不加宽输入框；`canvas` 是沉浸画布高度（160 – 760，越界自动钳制）。旧版本的 `dsh.composer-keys.v1` 会被自动读取并迁移。改完立即生效，不需要刷新。
+`send: null` 表示「没有键盘发送，只能点击」；`canvas` 是沉浸画布高度（160 – 760，越界自动钳制）。旧版本的 `dsh.composer-keys.v1` 会被自动读取并迁移。改完立即生效，不需要刷新。
 
 其余快捷键仍然在「设置 → 通用 → 快捷键」里改——那是 DSH 自带的可编辑快捷键面板，本插件不动它。
 
@@ -127,7 +129,7 @@ state.actions.insertText('## ', span);              // draftRev 不匹配就返�
 | `client.js` | 全部逻辑：捕获监听、合成换行、Markdown 辅助、沉浸渲染、设置面板 |
 | `locale/zh.json`、`locale/en.json` | 包级文案（面板文案在 `client.js` 的 `DICT` 里） |
 | `icon.svg` | 设置页图标 |
-| `test/harness.cjs` | 离线测试台，假 DOM 里跑 20 条用例 |
+| `test/harness.cjs` | 离线测试台，假 DOM 里跑 22 条用例 |
 | `LICENSE` | MIT |
 | `PUBLISHING.md` | 发到 GitHub / npm / 插件市场的操作步骤 |
 

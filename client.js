@@ -44,7 +44,6 @@ window.__ModuleLoader__.load({
     const DEFAULT_BLOCK_KEYBOARD_SEND = true;
     const DEFAULT_ENABLED = true;
     const DEFAULT_MODE = MODE_DEFAULT;
-    const DEFAULT_IMMERSIVE = true;
 
     /** 沉浸画布的初始高度，以及拖动顶边时允许的范围（像素）。 */
     const DEFAULT_CANVAS = 340;
@@ -164,17 +163,19 @@ window.__ModuleLoader__.load({
         mdContinue: 'Enter',
         mdContinueDesc: '换行的同时自动延续上一行的列表或引用标记',
         cardImmersive: '沉浸编辑窗',
-        immersiveTitle: '把输入框放大成沉浸编辑窗',
+        immersiveTitle: 'Markdown 模式即沉浸编辑窗',
         immersiveDesc:
-          'Markdown 模式下整个输入框卡片会展开成一块大画布，边写边渲染。没在打字时看到的是渲染结果，点一下就地进入编辑露出光标，改完点外面又回到渲染 —— 始终只有一个窗口。拖动画布顶边可以调高度。',
-        immersiveNote: '只有 Markdown 模式才会展开；默认模式下输入框保持原样。',
+          '切到 Markdown 模式，整个输入框卡片就会展开成一块大画布：边写边渲染，没在打字时看到的是渲染结果，点一下就地进入编辑露出光标，改完点外面又回到渲染 —— 始终只有一个窗口。不需要额外开关。',
+        immersiveNote: '默认模式下输入框保持原样，一根手指都不碰。',
         viewRendered: '预览',
         viewSource: '编辑',
         immersiveEmpty: '开始输入，这里会边写边渲染 Markdown。',
         immersiveExit: '收起沉浸',
         immersiveHint: '点击继续输入',
         gripLabel: '拖动调整高度',
-        canvasHint: '拖动顶边调整高度（160 – 760 像素）',
+        canvasHint: '拖动顶边调整高度（160 – 760 像素），高度会记住。',
+        canvasReset: '画布高度',
+        canvasResetAction: '恢复默认高度',
         cardMore: '其他快捷键',
         moreHint:
           '其余快捷键在「设置 → 通用 → 快捷键」里改。那里列出的 Enter、Shift + Enter、Ctrl + Enter 属于固定输入，只在这里才能调整。',
@@ -230,17 +231,19 @@ window.__ModuleLoader__.load({
         mdContinue: 'Enter',
         mdContinueDesc: 'Insert a line break and continue the list or quote marker above',
         cardImmersive: 'Immersive editor',
-        immersiveTitle: 'Expand the composer into an immersive editor',
+        immersiveTitle: 'Markdown mode is the immersive editor',
         immersiveDesc:
-          'In Markdown mode the whole composer card opens up into a large canvas that renders as you type. Out of focus you see the rendered result; click and the canvas steps aside so you edit in place with a real caret, then click away and the rendering returns — one window the whole time. Drag the top edge to resize.',
-        immersiveNote: 'Only Markdown mode expands the composer; Default mode leaves it untouched.',
+          'Switch to Markdown mode and the whole composer card opens up into a large canvas that renders as you type. Out of focus you see the rendered result; click and the canvas steps aside so you edit in place with a real caret, then click away and the rendering returns — one window the whole time. No extra switch.',
+        immersiveNote: 'Default mode leaves the composer untouched — not a single key is intercepted.',
         viewRendered: 'Preview',
         viewSource: 'Edit',
         immersiveEmpty: 'Start typing — Markdown is rendered here as you go.',
         immersiveExit: 'Collapse',
         immersiveHint: 'Click to keep typing',
         gripLabel: 'Drag to resize',
-        canvasHint: 'Drag the top edge to resize (160–760 px)',
+        canvasHint: 'Drag the top edge to resize (160–760 px); the height is remembered.',
+        canvasReset: 'Canvas height',
+        canvasResetAction: 'Reset height',
         cardMore: 'Other shortcuts',
         moreHint:
           'Every other shortcut lives in Settings → General → Shortcuts. The Enter, Shift + Enter and Ctrl + Enter entries listed there are fixed input and can only be changed here.',
@@ -417,7 +420,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
       return {
         enabled: DEFAULT_ENABLED,
         mode: DEFAULT_MODE,
-        immersive: DEFAULT_IMMERSIVE,
         canvas: DEFAULT_CANVAS,
         bindings: { newline: { ...DEFAULT_BINDINGS.newline }, send: null },
         blockKeyboardSend: DEFAULT_BLOCK_KEYBOARD_SEND,
@@ -451,7 +453,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
         return {
           enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : DEFAULT_ENABLED,
           mode: parsed.mode === MODE_MARKDOWN ? MODE_MARKDOWN : MODE_DEFAULT,
-          immersive: typeof parsed.immersive === 'boolean' ? parsed.immersive : DEFAULT_IMMERSIVE,
           canvas: clampCanvas(parsed.canvas),
           bindings: {
             newline: normalizeBinding(bindings.newline, DEFAULT_BINDINGS.newline),
@@ -501,7 +502,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
       return {
         enabled: state.enabled,
         mode: state.mode,
-        immersive: state.immersive,
         canvas: state.canvas,
         bindings: state.bindings,
         blockKeyboardSend: state.blockKeyboardSend,
@@ -511,7 +511,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
     function commitSettings(next) {
       state.enabled = next.enabled !== false;
       state.mode = next.mode === MODE_MARKDOWN ? MODE_MARKDOWN : MODE_DEFAULT;
-      state.immersive = next.immersive !== false;
       state.canvas = clampCanvas(next.canvas);
       state.bindings = next.bindings;
       state.blockKeyboardSend = next.blockKeyboardSend === true;
@@ -1047,12 +1046,12 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
       if (root !== null && typeof root.focus === 'function') root.focus();
     }
 
-    function setImmersive(next) {
+    /** 切模式：Markdown 模式本身就是画布，没有单独的开关。 */
+    function setMode(next) {
       const current = snapshot();
       commitSettings({
         enabled: current.enabled,
-        mode: current.mode,
-        immersive: next,
+        mode: next === MODE_MARKDOWN ? MODE_MARKDOWN : MODE_DEFAULT,
         canvas: current.canvas,
         bindings: current.bindings,
         blockKeyboardSend: current.blockKeyboardSend,
@@ -1065,7 +1064,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
       commitSettings({
         enabled: current.enabled,
         mode: current.mode,
-        immersive: current.immersive,
         canvas: clampCanvas(next),
         bindings: current.bindings,
         blockKeyboardSend: current.blockKeyboardSend,
@@ -1115,8 +1113,7 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
         };
       }, []);
 
-      const active =
-        settings.enabled === true && settings.mode === MODE_MARKDOWN && settings.immersive === true;
+      const active = settings.enabled === true && settings.mode === MODE_MARKDOWN;
 
       // 卡片放大、文字透明、渲染层显隐，全靠 body 上的这几个 class。
       useEffect(() => {
@@ -1254,7 +1251,7 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
               ),
               h(
                 'button',
-                { type: 'button', className: 'dcs-tab', onClick: () => setImmersive(false) },
+                { type: 'button', className: 'dcs-tab', onClick: () => setMode(MODE_DEFAULT) },
                 t('immersiveExit'),
               ),
             ),
@@ -1371,7 +1368,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
           save({
             enabled: current.enabled,
             mode: current.mode,
-            immersive: current.immersive,
             canvas: current.canvas,
             bindings: { ...current.bindings, [action]: binding },
             blockKeyboardSend: current.blockKeyboardSend,
@@ -1430,7 +1426,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
               save({
                 enabled: checked,
                 mode: live.current.mode,
-                immersive: live.current.immersive,
                 canvas: live.current.canvas,
                 bindings: live.current.bindings,
                 blockKeyboardSend: live.current.blockKeyboardSend,
@@ -1464,7 +1459,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
                     save({
                       enabled: live.current.enabled,
                       mode: MODE_DEFAULT,
-                      immersive: live.current.immersive,
                       canvas: live.current.canvas,
                       bindings: live.current.bindings,
                       blockKeyboardSend: live.current.blockKeyboardSend,
@@ -1482,7 +1476,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
                     save({
                       enabled: live.current.enabled,
                       mode: MODE_MARKDOWN,
-                      immersive: live.current.immersive,
                       canvas: live.current.canvas,
                       bindings: live.current.bindings,
                       blockKeyboardSend: live.current.blockKeyboardSend,
@@ -1541,7 +1534,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
               save({
                 enabled: live.current.enabled,
                 mode: live.current.mode,
-                immersive: live.current.immersive,
                 canvas: live.current.canvas,
                 bindings: live.current.bindings,
                 blockKeyboardSend: checked,
@@ -1561,22 +1553,10 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
           'div',
           { className: 'dck-card' },
           h('div', { className: 'dck-card-title' }, t('cardImmersive')),
-          h(SwitchRow, {
-            title: t('immersiveTitle'),
-            desc: t('immersiveDesc'),
-            checked: settings.immersive,
-            onChange: (checked) =>
-              save({
-                enabled: live.current.enabled,
-                mode: live.current.mode,
-                immersive: checked,
-                canvas: live.current.canvas,
-                bindings: live.current.bindings,
-                blockKeyboardSend: live.current.blockKeyboardSend,
-              }),
-          }),
+          h('div', { className: 'dck-row' }, h('div', { className: 'dck-text' }, h('strong', null, t('immersiveTitle')), h('span', null, t('immersiveDesc')))),
           h('div', { className: 'dck-row' }, h('div', { className: 'dck-text' }, h('span', null, t('immersiveNote')))),
           h('div', { className: 'dck-row' }, h('div', { className: 'dck-text' }, h('span', null, t('canvasHint')))),
+          h('div', { className: 'dck-row' }, h('div', { className: 'dck-text' }, h('span', null, t('canvasReset'))), h('button', { type: 'button', className: 'dck-button', onClick: () => setCanvas(DEFAULT_CANVAS) }, t('canvasResetAction'))),
         ),
 
         h(
@@ -1626,7 +1606,6 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
             const next = readSettings();
             state.enabled = next.enabled;
             state.mode = next.mode;
-            state.immersive = next.immersive;
             state.canvas = next.canvas;
             state.bindings = next.bindings;
             state.blockKeyboardSend = next.blockKeyboardSend;
@@ -1647,7 +1626,7 @@ body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
             state,
             snapshot,
             defaults,
-            version: 4,
+            version: 5,
           };
         }
 

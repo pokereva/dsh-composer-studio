@@ -396,7 +396,6 @@ check('把发送重新绑到 Ctrl + Enter 后，该组合会点击发送按钮',
   const stored = JSON.stringify({
     enabled: true,
     mode: 'markdown',
-    immersive: true,
     bindings: {
       newline: { code: 'Enter', alt: false, ctrl: false, meta: false, shift: false },
       send: { code: 'Enter', alt: false, ctrl: true, meta: false, shift: false },
@@ -415,7 +414,6 @@ check('关掉「拦截所有键盘发送」后 Ctrl + Enter 不再被改写成�
   const stored = JSON.stringify({
     enabled: true,
     mode: 'markdown',
-    immersive: true,
     bindings: {
       newline: { code: 'Enter', alt: false, ctrl: false, meta: false, shift: false },
       send: null,
@@ -584,10 +582,10 @@ check('沉浸画布高度：默认 340，越界自动钳制，非法值回落', 
   assert.strictEqual(read(480), 480, '合法值原样保留');
 });
 
-check('对外版本号已升到 4', () => {
+check('对外版本号已升到 5', () => {
   const env = createEnv({ root: null });
   installPlugin(env);
-  assert.strictEqual(env.window.__dshComposerStudio.version, 4);
+  assert.strictEqual(env.window.__dshComposerStudio.version, 5);
 });
 
 check('注册 settings.section 与 conversation.input.overlay 两个槽位', () => {
