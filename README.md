@@ -1,6 +1,6 @@
 # dsh-composer-studio
 
-把 DSH 的消息输入框变成真正的编辑器：默认模式**完全等于原版**；切到 Markdown 模式后，整个输入框变成**沉浸编辑窗**——左边照常打字，右边边写边渲染 Markdown，发送只能点按钮。全部行为可以在设置里一键开关。
+把 DSH 的消息输入框变成真正的编辑器：默认模式**完全等于原版**；切到 Markdown 模式后，整个输入框变成**沉浸编辑窗**——同一块矩形边写边渲染 Markdown，拖顶边调高，发送只能点按钮。全部行为可以在设置里一键开关。
 
 > DSH (DeepSeek Harness) 插件 · [MIT License](./LICENSE) · 零依赖、纯客户端
 
@@ -27,7 +27,7 @@ DSH 内核把 `Enter`、`Shift + Enter`、`Ctrl / Cmd + Enter` 这三组注册�
 | 模式 | 说明 |
 | --- | --- |
 | `默认` | 与 DSH 原版完全一致：Enter 发送、Shift + Enter 换行、Ctrl / Cmd + Enter 发送。插件不拦任何键。 |
-| `Markdown` | 整个输入框展开成沉浸编辑窗：左边是 DSH 原来的 contenteditable，右边是它的实时渲染；发送只能点按钮；外加一组 Markdown 输入辅助。 |
+| `Markdown` | 整个输入框展开成沉浸编辑窗：同一块矩形，失焦时显示渲染结果、点一下就地编辑原生文本；发送只能点按钮；外加一组 Markdown 输入辅助；拖顶边可调高度。 |
 
 Markdown 模式下多出来的按键（只在焦点位于输入框、且 `/` 或 `@` 菜单没打开时生效）：
 
@@ -44,14 +44,18 @@ Markdown 模式下多出来的按键（只在焦点位于输入框、且 `/` 或
 
 ### 沉浸编辑窗
 
-Markdown 模式下插件把卡片撑开：画布高度抬到 `--dcs-canvas`（默认 `340px`），输入框占左半边，右半边是同一份文本的实时渲染。两块是**同一份草稿、两种视图**——不是另开一个面板。
+Markdown 模式下插件把卡片撑开：画布高度抬到 `--dcs-canvas`（默认 `340px`），渲染层和输入框**占的是同一块矩形**——始终只有一个输入窗口，不是左右两栏、也不是另开一个面板。
+
+同一个矩形两副面孔：
+
+- **没在打字**：渲染层铺满，看到的是排版好的 Markdown。
+- **点一下就编辑**：渲染层让开，露出 DSH 原来那个 contenteditable，光标、选区、撤销栈、`/` 命令、`@` 提及全是原生的；改完点外面又回到渲染。
+
+焦点进出输入框就是这两态的开关，不用记快捷键。右上角三颗按钮：`预览` / `编辑` / `收起沉浸`；`收起沉浸` 只关掉放大效果，Markdown 模式本身还在。
+
+**拖动顶边改高度**：把鼠标移到画布上边缘（光标变成上下箭头），按住拖动即可，范围 160 – 760 px。拖动过程只改 CSS 变量，松手才落盘，所以跟手不卡；高度存在 `canvas` 字段里，下次进来照旧。
 
 放大只做两件事：给 `<body>` 加 `dcs-immersive` 类名，以及把卡片上的 `--dsh-composer-text-max-height` 指向 `--dcs-canvas`。不碰内核任何哈希类名。
-
-- 右上角三颗按钮：`渲染` / `源码` / `收起沉浸`。
-- `源码` 让输入框临时占满整行，方便贴长文。
-- `收起沉浸` 只关掉放大效果，Markdown 模式本身还在（设置里可以再打开）。
-- 渲染侧点一下会把焦点交回输入框，接着打字。
 
 渲染支持标题、引用、代码块、分隔线、有序 / 无序 / 任务列表、加粗 / 斜体 / 行内代码 / 链接（只放行 `http(s)`）。
 
@@ -97,19 +101,19 @@ state.actions.insertText('## ', span);              // draftRev 不匹配就返�
 | 按键映射 | 「发送消息」「插入换行」两行，各带 *录制 / 清除 / 取消* |
 | 行为 | 「屏蔽所有键盘发送」：连 `Ctrl / Cmd + Enter` 也换成换行 |
 | Markdown 输入辅助 | 上面那张按键表的只读说明 |
-| 沉浸编辑窗 | 开关；只有 Markdown 模式才会展开 |
+| 沉浸编辑窗 | 开关；只有 Markdown 模式才会展开。展开后可拖动画布顶边调整高度（160 – 760 px），高度也会保存 |
 
 录制时按 Esc 取消，纯修饰键会被忽略，两个动作不能共用同一组合键。
 
 配置存在 `localStorage['dsh.composer-studio.v1']`，落盘形状：
 
 ```json
-{ "enabled": true, "mode": "markdown", "immersive": true,
+{ "enabled": true, "mode": "markdown", "immersive": true, "canvas": 340,
   "bindings": { "newline": { "code": "Enter", "shift": false, "...": "..." }, "send": null },
   "blockKeyboardSend": true }
 ```
 
-`send: null` 表示「没有键盘发送，只能点击」；`immersive: false` 表示 Markdown 模式不加宽输入框。旧版本的 `dsh.composer-keys.v1` 会被自动读取并迁移。改完立即生效，不需要刷新。
+`send: null` 表示「没有键盘发送，只能点击」；`immersive: false` 表示 Markdown 模式不加宽输入框；`canvas` 是沉浸画布高度（160 – 760，越界自动钳制）。旧版本的 `dsh.composer-keys.v1` 会被自动读取并迁移。改完立即生效，不需要刷新。
 
 其余快捷键仍然在「设置 → 通用 → 快捷键」里改——那是 DSH 自带的可编辑快捷键面板，本插件不动它。
 
@@ -147,7 +151,7 @@ dsh plugin --profile <profile> add github:<owner>/dsh-composer-studio
 
 ```bash
 node --check client.js        # 语法
-node test/harness.cjs         # 20/20 passed
+node test/harness.cjs         # 22/22 passed
 ```
 
 在线验证用 cordis Inspect 查 `settings.section` 的 occupants 里有没有 `composer-studio`、`conversation.input.overlay` 里有没有 `composer-studio-immersive`，可以确认插件确实被页面加载。真实按键行为需要人在 GUI 里按一次。
@@ -156,7 +160,8 @@ node test/harness.cjs         # 20/20 passed
 
 - 快捷键录制只识别 `code`（物理键位），与 DSH 自己的快捷键服务一致；同一物理键在不同键盘布局下映射到不同字符是预期行为。
 - 「屏蔽所有键盘发送」只拦 `Enter` 及其修饰组合，不会拦截点击或是其他提交入口。
-- 沉浸编辑窗不改写输入框：左边始终是 DSH 自己的 contenteditable，这样 `/`、`@`、撤销栈、组合输入、草稿持久化都不用另造一套。渲染侧是**只读**的。
+- 沉浸编辑窗不改写输入框：编辑态下露出来的始终是 DSH 自己的 contenteditable，这样 `/`、`@`、撤销栈、组合输入、草稿持久化都不用另造一套。渲染侧是**只读**的。
+- 高度只有一份真相（`canvas` 字段）：拖动期间写行内 `--dcs-canvas`，松手才落盘；多标签页之间靠 `storage` 事件同步。
 - 渲染器是刻意做小的（约 170 行）：只覆盖对话里真正会用到的语法，不追求 CommonMark 全兼容。
 - 沉浸布局依赖 `--dsh-composer-text-max-height` 这个变量；内核若改名，输入框会退化成正常高度，其余功能不受影响。
 - 插件不读别的插件的 DOM，只认内核自己打的标记：`[data-composer-input]`、`[data-composer-card]`、`[data-composer-overlay]`、`button[aria-busy]`、`[data-trigger-menu]`。

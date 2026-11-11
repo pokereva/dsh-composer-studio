@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Composer Studio",
-    "description": "Turns the composer into a real editor: Default mode behaves exactly like stock DSH, while Markdown mode expands the whole composer into an immersive view that renders as you type. Everything can be switched off in one place."
+    "description": "Default mode is stock DSH. Markdown mode turns the composer into one resizable immersive canvas that renders as you type, edits in place on click, and sends only by button. Everything switches off in one place."
   }
 }

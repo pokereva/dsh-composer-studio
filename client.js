@@ -46,6 +46,17 @@ window.__ModuleLoader__.load({
     const DEFAULT_MODE = MODE_DEFAULT;
     const DEFAULT_IMMERSIVE = true;
 
+    /** 沉浸画布的初始高度，以及拖动顶边时允许的范围（像素）。 */
+    const DEFAULT_CANVAS = 340;
+    const MIN_CANVAS = 160;
+    const MAX_CANVAS = 760;
+
+    function clampCanvas(value) {
+      const number = typeof value === 'number' ? value : Number(value);
+      if (!Number.isFinite(number)) return DEFAULT_CANVAS;
+      return Math.max(MIN_CANVAS, Math.min(MAX_CANVAS, Math.round(number)));
+    }
+
     const CODE_LABELS = {
       Enter: 'Enter',
       NumpadEnter: 'Enter',
@@ -154,13 +165,16 @@ window.__ModuleLoader__.load({
         mdContinueDesc: '换行的同时自动延续上一行的列表或引用标记',
         cardImmersive: '沉浸编辑窗',
         immersiveTitle: '把输入框放大成沉浸编辑窗',
-        immersiveDesc: 'Markdown 模式下整个输入框卡片会展开成一块大画布，边写边渲染；点一下画布就能继续输入，切到「源码」可以看见光标。',
+        immersiveDesc:
+          'Markdown 模式下整个输入框卡片会展开成一块大画布，边写边渲染。没在打字时看到的是渲染结果，点一下就地进入编辑露出光标，改完点外面又回到渲染 —— 始终只有一个窗口。拖动画布顶边可以调高度。',
         immersiveNote: '只有 Markdown 模式才会展开；默认模式下输入框保持原样。',
-        viewRendered: '渲染',
-        viewSource: '源码',
-        immersiveEmpty: '开始输入，这里会实时渲染 Markdown。',
+        viewRendered: '预览',
+        viewSource: '编辑',
+        immersiveEmpty: '开始输入，这里会边写边渲染 Markdown。',
         immersiveExit: '收起沉浸',
         immersiveHint: '点击继续输入',
+        gripLabel: '拖动调整高度',
+        canvasHint: '拖动顶边调整高度（160 – 760 像素）',
         cardMore: '其他快捷键',
         moreHint:
           '其余快捷键在「设置 → 通用 → 快捷键」里改。那里列出的 Enter、Shift + Enter、Ctrl + Enter 属于固定输入，只在这里才能调整。',
@@ -218,13 +232,15 @@ window.__ModuleLoader__.load({
         cardImmersive: 'Immersive editor',
         immersiveTitle: 'Expand the composer into an immersive editor',
         immersiveDesc:
-          'In Markdown mode the whole composer card opens up into a large canvas that renders as you type. Click the canvas to keep typing, or switch to Source to see the caret.',
+          'In Markdown mode the whole composer card opens up into a large canvas that renders as you type. Out of focus you see the rendered result; click and the canvas steps aside so you edit in place with a real caret, then click away and the rendering returns — one window the whole time. Drag the top edge to resize.',
         immersiveNote: 'Only Markdown mode expands the composer; Default mode leaves it untouched.',
-        viewRendered: 'Rendered',
-        viewSource: 'Source',
+        viewRendered: 'Preview',
+        viewSource: 'Edit',
         immersiveEmpty: 'Start typing — Markdown is rendered here as you go.',
         immersiveExit: 'Collapse',
         immersiveHint: 'Click to keep typing',
+        gripLabel: 'Drag to resize',
+        canvasHint: 'Drag the top edge to resize (160–760 px)',
         cardMore: 'Other shortcuts',
         moreHint:
           'Every other shortcut lives in Settings → General → Shortcuts. The Enter, Shift + Enter and Ctrl + Enter entries listed there are fixed input and can only be changed here.',
@@ -266,10 +282,11 @@ window.__ModuleLoader__.load({
 
 /* ── 沉浸编辑窗 ───────────────────────────────────────────────────── */
 
-/* 画布高度：卡片和渲染面板共用同一个值，两边永远对齐。
-   卡片多留 var(--dcs-row) 给底部的工具行，面板才不会压住发送按钮。
-   --dcs-pad 对齐卡片自己的 padding-top: 8px（内核写的），渲染面板从这里开始。 */
-:root { --dcs-canvas: 340px; --dcs-row: 52px; --dcs-pad: 8px; }
+/* 画布高度只由一个变量决定：--dcs-canvas。
+   JS 在沉浸激活时把用户拖出来的高度写到 <html> 的行内样式上，卡片和
+   渲染层都读它，所以拖完立刻同步，不需要 React 重渲染。
+   --dcs-pad 对齐卡片自己的 padding-top: 8px（内核写的）。 */
+:root { --dcs-canvas: 340px; --dcs-pad: 8px; --dcs-grip: 10px; }
 
 body.dcs-immersive [data-composer-card] {
   /* DSH 自己的滚动容器写的就是 max-height: var(--dsh-composer-text-max-height)，
@@ -280,35 +297,86 @@ body.dcs-immersive [data-composer-card] {
 }
 body.dcs-immersive [data-composer-card] [data-composer-input] {
   min-height: var(--dcs-canvas);
-  width: calc(50% - 3px);
   max-width: none;
 }
-body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width: 100%; }
 
+/* 拖动把手：贴在卡片顶边，鼠标移上去光标变成上下箭头。
+   它本身不占布局（height: 0 + 绝对定位），只提供一块可抓取的热区。 */
+.dcs-grip {
+  position: absolute;
+  top: calc(-1 * var(--dcs-grip));
+  left: 0;
+  right: 0;
+  height: calc(var(--dcs-grip) * 2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 4;
+}
+.dcs-grip::after {
+  content: '';
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.18));
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.dcs-grip:hover::after,
+.dcs-grip[data-dragging='true']::after { opacity: 1; }
+.dcs-grip[data-dragging='true']::after { background: var(--dsw-alias-brand-primary, #247bbf); }
+body.dcs-resizing, body.dcs-resizing * { cursor: ns-resize !important; user-select: none !important; }
+
+/* 单窗格：渲染层和输入框占的是同一块矩形，永远只有一个输入窗口。
+   没在打字时看到的是渲染后的 Markdown；一旦焦点进到输入框，这一层让开，
+   露出 DSH 原来那个 contenteditable（光标、选区、撤销、斜杠命令、@ 提及
+   全是原生的），改完点外面又回到渲染。 */
 .dcs-pane {
   position: absolute;
   top: var(--dcs-pad);
+  left: 0;
   right: 0;
-  width: calc(50% - 3px);
   height: var(--dcs-canvas);
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
   background: var(--dsw-specific-input-major, var(--dsw-alias-bg-layer-1, transparent));
   border-radius: var(--dsw-radius-md, 8px);
   overflow: hidden;
   z-index: 2;
 }
-.dcs-pane[data-view='source'] { display: none; }
-.dcs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.06)); }
+/* 正在编辑：让路给真正的输入框，两者始终是同一个位置。 */
+body.dcs-editing .dcs-pane { display: none; }
+
+/* 渲染态把输入框的文字藏起来（光标留色），眼睛看到的是渲染结果。 */
+body.dcs-immersive [data-composer-card] [data-composer-input] {
+  -webkit-text-fill-color: transparent;
+  text-fill-color: transparent;
+}
+body.dcs-immersive.dcs-editing [data-composer-card] [data-composer-input] {
+  -webkit-text-fill-color: currentColor;
+  text-fill-color: currentColor;
+}
+
+.dcs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.06));
+  flex-shrink: 0;
+}
 .dcs-title { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dsw-alias-label-secondary, #6b7280); }
 .dcs-tools { display: flex; align-items: center; gap: 6px; }
 .dcs-tab { font: inherit; font-size: 11px; line-height: 1; padding: 5px 9px; border-radius: var(--dsw-radius-md, 8px); border: 1px solid transparent; background: transparent; color: var(--dsw-alias-label-secondary, #6b7280); cursor: pointer; }
 .dcs-tab[data-active='true'] { border-color: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12)); background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.06)); color: var(--dsw-alias-label-primary, inherit); }
 .dcs-tab:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, #247bbf); outline-offset: 1px; }
-.dcs-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px 14px; font-size: var(--dsh-content-font-size, 13px); line-height: 1.68; cursor: text; }
+.dcs-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 14px 12px; font-size: var(--dsh-content-font-size, 14px); line-height: inherit; cursor: text; }
 .dcs-empty { margin: 0; color: var(--dsw-alias-label-secondary, #6b7280); font-size: 12px; }
 .dcs-count { font-size: 11px; color: var(--dsw-alias-label-secondary, #6b7280); }
+
 
 .dcs-md p { margin: 0 0 8px; }
 .dcs-md p:last-child { margin-bottom: 0; }
@@ -349,6 +417,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
         enabled: DEFAULT_ENABLED,
         mode: DEFAULT_MODE,
         immersive: DEFAULT_IMMERSIVE,
+        canvas: DEFAULT_CANVAS,
         bindings: { newline: { ...DEFAULT_BINDINGS.newline }, send: null },
         blockKeyboardSend: DEFAULT_BLOCK_KEYBOARD_SEND,
       };
@@ -382,6 +451,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
           enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : DEFAULT_ENABLED,
           mode: parsed.mode === MODE_MARKDOWN ? MODE_MARKDOWN : MODE_DEFAULT,
           immersive: typeof parsed.immersive === 'boolean' ? parsed.immersive : DEFAULT_IMMERSIVE,
+          canvas: clampCanvas(parsed.canvas),
           bindings: {
             newline: normalizeBinding(bindings.newline, DEFAULT_BINDINGS.newline),
             send: normalizeBinding(bindings.send, null),
@@ -431,6 +501,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
         enabled: state.enabled,
         mode: state.mode,
         immersive: state.immersive,
+        canvas: state.canvas,
         bindings: state.bindings,
         blockKeyboardSend: state.blockKeyboardSend,
       };
@@ -440,6 +511,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
       state.enabled = next.enabled !== false;
       state.mode = next.mode === MODE_MARKDOWN ? MODE_MARKDOWN : MODE_DEFAULT;
       state.immersive = next.immersive !== false;
+      state.canvas = clampCanvas(next.canvas);
       state.bindings = next.bindings;
       state.blockKeyboardSend = next.blockKeyboardSend === true;
       writeSettings(snapshot());
@@ -980,18 +1052,46 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
         enabled: current.enabled,
         mode: current.mode,
         immersive: next,
+        canvas: current.canvas,
         bindings: current.bindings,
         blockKeyboardSend: current.blockKeyboardSend,
       });
     }
 
+    /** 拖动结束后才落盘，拖动过程中只改 CSS 变量，不触发 React 重渲染。 */
+    function setCanvas(next) {
+      const current = snapshot();
+      commitSettings({
+        enabled: current.enabled,
+        mode: current.mode,
+        immersive: current.immersive,
+        canvas: clampCanvas(next),
+        bindings: current.bindings,
+        blockKeyboardSend: current.blockKeyboardSend,
+      });
+    }
+
+    /** 把画布高度写到 <html> 的行内样式：卡片和渲染层都读 --dcs-canvas。 */
+    function applyCanvas(height) {
+      if (typeof document === 'undefined') return;
+      document.documentElement.style.setProperty('--dcs-canvas', `${height}px`);
+    }
+
+    function clearCanvas() {
+      if (typeof document === 'undefined') return;
+      document.documentElement.style.removeProperty('--dcs-canvas');
+    }
+
     /**
      * 这个面板挂在 conversation.input.overlay 上，渲染进 composer 卡片内部的
      * div[data-composer-overlay]。卡片自己是 position: relative，所以面板只要
-     * 绝对定位就能严丝合缝地贴在卡片右侧，而不是在输入框下面另起一块。
+     * 绝对定位就能和输入框严丝合缝地重合 —— 只有一个窗口，没有左右两栏。
      *
-     * 左侧仍然是 DSH 原来那个 contenteditable（光标、撤销、斜杠命令、@ 提及
-     * 全都还在），右侧是它的实时渲染结果——同一份文本，两种视图。
+     * 同一个矩形两副面孔：
+     *   - 失焦 / 点「渲染」：盖住输入框，显示渲染后的 Markdown；
+     *   - 聚焦（点一下或按「编辑」）：这一层让开，露出 DSH 原来那个
+     *     contenteditable —— 光标、选区、撤销栈、斜杠命令、@ 提及全是原生的。
+     * 因为两者占的是同一块地方，视觉上始终是一个输入框在「渲染 ⇄ 编辑」。
      */
     function ComposerStudioImmersive(props) {
       const actions = props === undefined ? null : props.inputActions;
@@ -999,7 +1099,9 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
 
       const [draft, setDraftText] = useState(state.draft);
       const [settings, setSettingsView] = useState(snapshot);
-      const [view, setView] = useState('split');
+      const [editing, setEditing] = useState(false);
+      const [dragging, setDragging] = useState(false);
+      const canvasRef = useRef(state.canvas);
 
       useEffect(() => {
         const offDraft = onDraftChange(() => setDraftText(state.draft));
@@ -1015,17 +1117,82 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
       const active =
         settings.enabled === true && settings.mode === MODE_MARKDOWN && settings.immersive === true;
 
-      // 卡片放大、编辑区收窄，全靠 body 上的这两个 class。
+      // 卡片放大、文字透明、渲染层显隐，全靠 body 上的这几个 class。
       useEffect(() => {
         if (typeof document === 'undefined') return undefined;
         const body = document.body;
         body.classList.toggle(IMMERSIVE_CLASS, active);
-        body.classList.toggle('dcs-source', active && view === 'source');
+        body.classList.toggle('dcs-editing', active && editing);
+        if (!active) clearCanvas();
         return () => {
           body.classList.remove(IMMERSIVE_CLASS);
-          body.classList.remove('dcs-source');
+          body.classList.remove('dcs-editing');
+          body.classList.remove('dcs-resizing');
+          clearCanvas();
         };
-      }, [active, view]);
+      }, [active, editing]);
+
+      // 高度只有一份真相：设置里的 canvas。激活期间写到 <html> 上给 CSS 用。
+      useEffect(() => {
+        canvasRef.current = settings.canvas;
+        if (active) applyCanvas(settings.canvas);
+      }, [active, settings.canvas]);
+
+      // 焦点进出输入框就是「编辑 ⇄ 渲染」的开关，用户不用记任何快捷键。
+      useEffect(() => {
+        if (typeof document === 'undefined') return undefined;
+        const inComposer = (target) =>
+          target instanceof Element && target.closest('[data-composer-input]') !== null;
+        const onFocusIn = (event) => {
+          if (inComposer(event.target)) setEditing(true);
+        };
+        const onFocusOut = (event) => {
+          if (!inComposer(event.target)) return;
+          // 焦点只是移到卡片里的按钮上时不要闪回渲染，等下一个事件再判。
+          const next = event.relatedTarget;
+          if (next instanceof Element && next.closest('[data-composer-card]') !== null) return;
+          setEditing(false);
+        };
+        document.addEventListener('focusin', onFocusIn, true);
+        document.addEventListener('focusout', onFocusOut, true);
+        return () => {
+          document.removeEventListener('focusin', onFocusIn, true);
+          document.removeEventListener('focusout', onFocusOut, true);
+        };
+      }, []);
+
+      /**
+       * 拖动顶边改高度。拖动中只写 CSS 变量（不重渲染），松手才落盘，
+       * 所以拖动是跟手的，不会因为 React 更新而卡顿。
+       */
+      const onGripPointerDown = useCallback((event) => {
+        if (event.button !== undefined && event.button !== 0) return;
+        event.preventDefault();
+        const startY = event.clientY;
+        const startHeight = canvasRef.current;
+        let latest = startHeight;
+        const body = typeof document === 'undefined' ? null : document.body;
+        if (body !== null) body.classList.add('dcs-resizing');
+        setDragging(true);
+
+        const onMove = (moveEvent) => {
+          // 往上拖变高：屏幕坐标 y 越小，画布越高。
+          latest = clampCanvas(startHeight + (startY - moveEvent.clientY));
+          applyCanvas(latest);
+        };
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove, true);
+          window.removeEventListener('pointerup', onUp, true);
+          window.removeEventListener('pointercancel', onUp, true);
+          if (body !== null) body.classList.remove('dcs-resizing');
+          setDragging(false);
+          setCanvas(latest);
+        };
+
+        window.addEventListener('pointermove', onMove, true);
+        window.addEventListener('pointerup', onUp, true);
+        window.addEventListener('pointercancel', onUp, true);
+      }, []);
 
       if (!active) return null;
 
@@ -1034,53 +1201,76 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
       const empty = text.trim() === '';
 
       return h(
-        'div',
-        {
-          className: 'dcs-pane',
-          'data-composer-immersive': 'true',
-          'data-view': view === 'source' ? 'source' : 'split',
-        },
+        Fragment,
+        null,
+        h('div', {
+          key: 'grip',
+          className: 'dcs-grip',
+          'data-dcs-grip': 'true',
+          'data-dragging': dragging ? 'true' : 'false',
+          role: 'separator',
+          'aria-orientation': 'horizontal',
+          'aria-label': t('gripLabel'),
+          onPointerDown: onGripPointerDown,
+        }),
         h(
           'div',
-          { className: 'dcs-head' },
-          h('span', { className: 'dcs-title' }, 'Markdown'),
+          {
+            key: 'pane',
+            className: 'dcs-pane',
+            'data-composer-immersive': 'true',
+          },
           h(
             'div',
-            { className: 'dcs-tools' },
-            h('span', { className: 'dcs-count' }, `${text.length}`),
+            { className: 'dcs-head' },
+            h('span', { className: 'dcs-title' }, 'Markdown'),
             h(
-              'button',
-              {
-                type: 'button',
-                className: 'dcs-tab',
-                'data-active': view === 'split' ? 'true' : 'false',
-                onClick: () => setView('split'),
-              },
-              t('viewRendered'),
-            ),
-            h(
-              'button',
-              {
-                type: 'button',
-                className: 'dcs-tab',
-                'data-active': view === 'source' ? 'true' : 'false',
-                onClick: () => setView('source'),
-              },
-              t('viewSource'),
-            ),
-            h(
-              'button',
-              { type: 'button', className: 'dcs-tab', onClick: () => setImmersive(false) },
-              t('immersiveExit'),
+              'div',
+              { className: 'dcs-tools' },
+              h('span', { className: 'dcs-count' }, `${text.length}`),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dcs-tab',
+                  'data-active': editing ? 'false' : 'true',
+                  onClick: () => setEditing(false),
+                },
+                t('viewRendered'),
+              ),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dcs-tab',
+                  'data-active': editing ? 'true' : 'false',
+                  onClick: () => {
+                    setEditing(true);
+                    focusComposer();
+                  },
+                },
+                t('viewSource'),
+              ),
+              h(
+                'button',
+                { type: 'button', className: 'dcs-tab', onClick: () => setImmersive(false) },
+                t('immersiveExit'),
+              ),
             ),
           ),
-        ),
-        h(
-          'div',
-          { className: 'dcs-body', onClick: focusComposer },
-          empty
-            ? h('p', { className: 'dcs-empty' }, t('immersiveEmpty'))
-            : h('div', { className: 'dcs-md' }, renderMarkdown(text, 'dcs')),
+          h(
+            'div',
+            {
+              className: 'dcs-body',
+              onClick: () => {
+                setEditing(true);
+                focusComposer();
+              },
+            },
+            empty
+              ? h('p', { className: 'dcs-empty' }, t('immersiveEmpty'))
+              : h('div', { className: 'dcs-md' }, renderMarkdown(text, 'dcs')),
+          ),
         ),
       );
     }
@@ -1181,6 +1371,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
             enabled: current.enabled,
             mode: current.mode,
             immersive: current.immersive,
+            canvas: current.canvas,
             bindings: { ...current.bindings, [action]: binding },
             blockKeyboardSend: current.blockKeyboardSend,
           });
@@ -1239,6 +1430,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
                 enabled: checked,
                 mode: live.current.mode,
                 immersive: live.current.immersive,
+                canvas: live.current.canvas,
                 bindings: live.current.bindings,
                 blockKeyboardSend: live.current.blockKeyboardSend,
               }),
@@ -1272,6 +1464,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
                       enabled: live.current.enabled,
                       mode: MODE_DEFAULT,
                       immersive: live.current.immersive,
+                      canvas: live.current.canvas,
                       bindings: live.current.bindings,
                       blockKeyboardSend: live.current.blockKeyboardSend,
                     }),
@@ -1289,6 +1482,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
                       enabled: live.current.enabled,
                       mode: MODE_MARKDOWN,
                       immersive: live.current.immersive,
+                      canvas: live.current.canvas,
                       bindings: live.current.bindings,
                       blockKeyboardSend: live.current.blockKeyboardSend,
                     }),
@@ -1347,6 +1541,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
                 enabled: live.current.enabled,
                 mode: live.current.mode,
                 immersive: live.current.immersive,
+                canvas: live.current.canvas,
                 bindings: live.current.bindings,
                 blockKeyboardSend: checked,
               }),
@@ -1374,11 +1569,13 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
                 enabled: live.current.enabled,
                 mode: live.current.mode,
                 immersive: checked,
+                canvas: live.current.canvas,
                 bindings: live.current.bindings,
                 blockKeyboardSend: live.current.blockKeyboardSend,
               }),
           }),
           h('div', { className: 'dck-row' }, h('div', { className: 'dck-text' }, h('span', null, t('immersiveNote')))),
+          h('div', { className: 'dck-row' }, h('div', { className: 'dck-text' }, h('span', null, t('canvasHint')))),
         ),
 
         h(
@@ -1429,6 +1626,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
             state.enabled = next.enabled;
             state.mode = next.mode;
             state.immersive = next.immersive;
+            state.canvas = next.canvas;
             state.bindings = next.bindings;
             state.blockKeyboardSend = next.blockKeyboardSend;
             settingsListeners.forEach((listener) => listener());
@@ -1448,7 +1646,7 @@ body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width
             state,
             snapshot,
             defaults,
-            version: 3,
+            version: 4,
           };
         }
 

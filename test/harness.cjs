@@ -566,6 +566,30 @@ check('Markdown 模式空列表项回车结束列表', () => {
   });
 });
 
+check('沉浸画布高度：默认 340，越界自动钳制，非法值回落', () => {
+  const body = (canvas) => {
+    const parsed = JSON.parse(markdownSettings());
+    parsed.canvas = canvas;
+    return JSON.stringify(parsed);
+  };
+  const read = (canvas) => {
+    const env = createEnv({ root: null, storage: { 'dsh.composer-studio.v1': body(canvas) } });
+    installPlugin(env);
+    return env.window.__dshComposerStudio.snapshot().canvas;
+  };
+  assert.strictEqual(read(undefined), 340, '没配过就用默认高度');
+  assert.strictEqual(read(2000), 760, '超过上限按上限算');
+  assert.strictEqual(read(10), 160, '低于下限按下限算');
+  assert.strictEqual(read('abc'), 340, '非数字回落到默认');
+  assert.strictEqual(read(480), 480, '合法值原样保留');
+});
+
+check('对外版本号已升到 4', () => {
+  const env = createEnv({ root: null });
+  installPlugin(env);
+  assert.strictEqual(env.window.__dshComposerStudio.version, 4);
+});
+
 check('注册 settings.section 与 conversation.input.overlay 两个槽位', () => {
   const env = createEnv({ root: null });
   const instance = installPlugin(env);
