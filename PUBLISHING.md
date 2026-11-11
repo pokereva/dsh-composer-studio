@@ -19,7 +19,7 @@ dd99a4b docs: MIT license, npm metadata, and click-only wording
 `package.json` 里有三处 `YOUR_GITHUB_USER`，替换成你的 GitHub 用户名（假设是 `poker`，仓库名 `dsh-composer-studio`）：
 
 ```bash
-cd output/dsh-composer-textarea_11-11
+cd output/dsh-composer-studio
 sed -i 's/YOUR_GITHUB_USER/poker/g' package.json
 ```
 
@@ -77,7 +77,7 @@ git push -u origin main
 ## 4. 推送
 
 ```bash
-cd output/dsh-composer-textarea_11-11
+cd output/dsh-composer-studio
 git remote add origin <上一步的地址>
 git push -u origin main
 ```
