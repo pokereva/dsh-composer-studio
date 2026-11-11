@@ -1,0 +1,56 @@
+{
+  "name": "@local/dsh-composer-keys",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Turns the DSH message composer into a real text editor: Enter inserts a line break and sending happens by click. Both gestures can be remapped.",
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "composer",
+    "keyboard",
+    "shortcut"
+  ],
+  "license": "MIT",
+  "author": "poker",
+  "homepage": "https://github.com/YOUR_GITHUB_USER/dsh-composer-keys#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR_GITHUB_USER/dsh-composer-keys.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YOUR_GITHUB_USER/dsh-composer-keys/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "scripts": {
+    "test": "node test/harness.cjs",
+    "check": "node --check client.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime"
+      ]
+    }
+  }
+}
