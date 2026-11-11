@@ -61,14 +61,24 @@ root.dispatchEvent(new KeyboardEvent('keydown', {
 | `locale/zh.json`、`locale/en.json` | 包级文案（面板文案在 `client.js` 的 `DICT` 里） |
 | `icon.svg` | 设置页图标 |
 | `test/harness.cjs` | 离线测试台，假 DOM 里跑 11 条用例 |
+| `LICENSE` | MIT |
+| `PUBLISHING.md` | 发到 GitHub / npm / 插件市场的操作步骤 |
 
 ## 安装
+
+### 从源码装（本地开发）
 
 ```bash
 plugin_manager({ action: 'install_bundle', target: '<本目录绝对路径>' })
 ```
 
 安装会写成 `link:` 依赖，因此改完 `client.js` 只要**刷新页面**即可，不必重装；改 `package.json` / `cordis.patch.yml` 才需要重启 DSH。
+
+### 从 GitHub 装
+
+```bash
+dsh plugin --profile <profile> add github:<owner>/dsh-composer-keys
+```
 
 ## 验证
 
