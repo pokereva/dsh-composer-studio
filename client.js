@@ -300,16 +300,17 @@ body.dcs-immersive [data-composer-card] [data-composer-input] {
   max-width: none;
 }
 
-/* 拖动把手：贴在卡片顶边，鼠标移上去光标变成上下箭头。
-   它本身不占布局（height: 0 + 绝对定位），只提供一块可抓取的热区。 */
+/* 拖动把手：卡片的 padding-top 正好是 --dcs-pad，渲染层又从那里往下铺，
+   所以把热区做成「卡片顶边往上一小条 + 整条 padding」，正好卡在渲染层上沿之前，
+   既好抓又不会盖住面板自己的按钮。 */
 .dcs-grip {
   position: absolute;
   top: calc(-1 * var(--dcs-grip));
   left: 0;
   right: 0;
-  height: calc(var(--dcs-grip) * 2);
+  height: calc(var(--dcs-grip) + var(--dcs-pad));
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   cursor: ns-resize;
   touch-action: none;
