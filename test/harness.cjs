@@ -319,9 +319,9 @@ function markdownSettings() {
   });
 }
 
-check('裸 Enter 在输入框里换行，不触发发送', () => {
+check('Markdown 模式下裸 Enter 换行，不触发发送', () => {
   const composer = createComposer();
-  const env = createEnv({ root: composer.card });
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
   installPlugin(env);
   const event = keydown(env, { key: 'Enter', code: 'Enter', target: composer.input });
   assert.strictEqual(event.defaultPrevented, true, 'Enter 的默认行为必须被挡住');
@@ -333,9 +333,9 @@ check('裸 Enter 在输入框里换行，不触发发送', () => {
   assert.strictEqual(synthetic.key, 'Enter');
 });
 
-check('Shift + Enter 同样不发送，退化为换行', () => {
+check('Markdown 模式下 Shift + Enter 同样不发送，退化为换行', () => {
   const composer = createComposer();
-  const env = createEnv({ root: composer.card });
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
   installPlugin(env);
   const event = keydown(env, { key: 'Enter', code: 'Enter', shiftKey: true, target: composer.input });
   assert.strictEqual(event.defaultPrevented, true);
@@ -343,9 +343,9 @@ check('Shift + Enter 同样不发送，退化为换行', () => {
   assert.strictEqual(composer.input.dispatched.length, 1);
 });
 
-check('Ctrl + Enter 也不会把消息发出去', () => {
+check('Markdown 模式下 Ctrl + Enter 也不会把消息发出去', () => {
   const composer = createComposer();
-  const env = createEnv({ root: composer.card });
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
   installPlugin(env);
   const event = keydown(env, { key: 'Enter', code: 'Enter', ctrlKey: true, target: composer.input });
   assert.strictEqual(event.defaultPrevented, true);
@@ -384,7 +384,7 @@ check('输入法组合期间的 Enter 不接管', () => {
 
 check('长按 Enter 只在第一次换行', () => {
   const composer = createComposer();
-  const env = createEnv({ root: composer.card });
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
   installPlugin(env);
   keydown(env, { key: 'Enter', code: 'Enter', target: composer.input });
   keydown(env, { key: 'Enter', code: 'Enter', repeat: true, target: composer.input });
@@ -394,13 +394,16 @@ check('长按 Enter 只在第一次换行', () => {
 check('把发送重新绑到 Ctrl + Enter 后，该组合会点击发送按钮', () => {
   const composer = createComposer();
   const stored = JSON.stringify({
+    enabled: true,
+    mode: 'markdown',
+    immersive: true,
     bindings: {
       newline: { code: 'Enter', alt: false, ctrl: false, meta: false, shift: false },
       send: { code: 'Enter', alt: false, ctrl: true, meta: false, shift: false },
     },
     blockKeyboardSend: false,
   });
-  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-keys.v1': stored } });
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': stored } });
   installPlugin(env);
   const event = keydown(env, { key: 'Enter', code: 'Enter', ctrlKey: true, target: composer.input });
   assert.strictEqual(event.defaultPrevented, true);
@@ -410,13 +413,16 @@ check('把发送重新绑到 Ctrl + Enter 后，该组合会点击发送按钮',
 check('关掉「拦截所有键盘发送」后 Ctrl + Enter 不再被改写成换行', () => {
   const composer = createComposer();
   const stored = JSON.stringify({
+    enabled: true,
+    mode: 'markdown',
+    immersive: true,
     bindings: {
       newline: { code: 'Enter', alt: false, ctrl: false, meta: false, shift: false },
       send: null,
     },
     blockKeyboardSend: false,
   });
-  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-keys.v1': stored } });
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': stored } });
   installPlugin(env);
   const event = keydown(env, { key: 'Enter', code: 'Enter', ctrlKey: true, target: composer.input });
   assert.strictEqual(event.defaultPrevented, false, '关掉后应当放行给 DSH 原来的处理');
@@ -458,6 +464,21 @@ check('默认模式下 Tab 不接管', () => {
   const event = keydown(env, { key: 'Tab', code: 'Tab', target: composer.input });
   assert.strictEqual(event.defaultPrevented, false);
   assert.strictEqual(env.execCommands.length, 0);
+});
+
+check('默认模式下 Enter / Shift + Enter / Ctrl + Enter 全部原样放行', () => {
+  const composer = createComposer();
+  const env = createEnv({ root: composer.card });
+  installPlugin(env);
+  const plain = keydown(env, { key: 'Enter', code: 'Enter', target: composer.input });
+  assert.strictEqual(plain.defaultPrevented, false, '默认模式下裸 Enter 必须原样交给 DSH（发送）');
+  assert.strictEqual(plain.immediateStopped, false);
+  const shifted = keydown(env, { key: 'Enter', code: 'Enter', shiftKey: true, target: composer.input });
+  assert.strictEqual(shifted.defaultPrevented, false, '默认模式下 Shift + Enter 必须原样交给 DSH（换行）');
+  const withCtrl = keydown(env, { key: 'Enter', code: 'Enter', ctrlKey: true, target: composer.input });
+  assert.strictEqual(withCtrl.defaultPrevented, false);
+  assert.strictEqual(composer.send.clicks, 0, '插件自己绝不点发送按钮');
+  assert.strictEqual(composer.input.dispatched.length, 0, '默认模式下不该补发任何合成事件');
 });
 
 check('Markdown 模式 Ctrl + 1 / 2 / 3 插入标题', () => {
@@ -545,7 +566,7 @@ check('Markdown 模式空列表项回车结束列表', () => {
   });
 });
 
-check('注册 settings.section 与 composer.dock 两个槽位', () => {
+check('注册 settings.section 与 conversation.input.overlay 两个槽位', () => {
   const env = createEnv({ root: null });
   const instance = installPlugin(env);
   assert.strictEqual(instance.slots.length, 2);
@@ -553,9 +574,14 @@ check('注册 settings.section 与 composer.dock 两个槽位', () => {
   assert.ok(settings, '设置面板入口');
   assert.strictEqual(settings.entries[0].id, 'composer-studio');
   assert.strictEqual(settings.entries[0].order, 14);
-  const dock = instance.slots.find((slot) => slot.name === 'conversation.composer.dock');
-  assert.ok(dock, 'MD 预览挂在输入框下方的 dock 槽');
-  assert.strictEqual(dock.entries[0].id, 'composer-studio-preview');
+  const overlay = instance.slots.find((slot) => slot.name === 'conversation.input.overlay');
+  assert.ok(overlay, '沉浸编辑窗挂在输入框卡片内部的 overlay 槽');
+  assert.strictEqual(overlay.entries[0].id, 'composer-studio-immersive');
+  assert.strictEqual(
+    instance.slots.some((slot) => slot.name === 'conversation.composer.dock'),
+    false,
+    '不再往输入框下方挂 dock 预览',
+  );
 });
 
 check('apply 注册了 window 捕获监听与样式', () => {

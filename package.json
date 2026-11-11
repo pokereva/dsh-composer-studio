@@ -1,7 +1,7 @@
 {
   "name": "@local/dsh-composer-studio",
-  "version": "2.0.0",
-  "description": "Turns the DSH message composer into a real editor: Enter only inserts a line break and sending happens by click, plus an optional Markdown writing mode with input helpers and a live preview. Everything can be switched off in one place.",
+  "version": "2.1.0",
+  "description": "Turns the DSH composer into a real editor: Default mode is exactly stock DSH, while Markdown mode expands the composer into an immersive split view that renders Markdown as you type. Everything can be switched off in one place.",
   "keywords": [
     "deepseek",
     "harness",

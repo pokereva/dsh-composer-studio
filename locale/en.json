@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Composer Studio",
-    "description": "Turns the composer into a real editor: Enter only inserts a line break, sending happens by click, and an optional Markdown mode adds input helpers plus a live preview. Everything can be switched off in one place."
+    "description": "Turns the composer into a real editor: Default mode behaves exactly like stock DSH, while Markdown mode expands the whole composer into an immersive view that renders as you type. Everything can be switched off in one place."
   }
 }

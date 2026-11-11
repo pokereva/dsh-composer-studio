@@ -1,21 +1,22 @@
 # dsh-composer-studio
 
-把 DSH 的消息输入框变成真正的文本编辑框：**Enter 只换行，发送只能点按钮**；再叠一个可选的 **Markdown 写作模式**（输入辅助 + 实时预览）。全部行为可以在设置里一键开关。
+把 DSH 的消息输入框变成真正的编辑器：默认模式**完全等于原版**；切到 Markdown 模式后，整个输入框变成**沉浸编辑窗**——左边照常打字，右边边写边渲染 Markdown，发送只能点按钮。全部行为可以在设置里一键开关。
 
 > DSH (DeepSeek Harness) 插件 · [MIT License](./LICENSE) · 零依赖、纯客户端
 
-DSH 内核把 `Enter`、`Shift + Enter`、`Ctrl / Cmd + Enter` 这三组注册成了 *fixed input*（固定输入）——它们会出现在「设置 → 通用 → 快捷键」里，但**只读、不允许改写**。所以「把 Enter 改成换行」没法通过配置实现，只能抢在事件到达内核之前接管。
+DSH 内核把 `Enter`、`Shift + Enter`、`Ctrl / Cmd + Enter` 这三组注册成了 *fixed input*（固定输入），会出现在「设置 → 通用 → 快捷键」里，但**只读、不允许改写**。所以插件只能在事件到达内核之前接管——而且只在 Markdown 模式下接管。
 
 ## 行为
 
-| 手势 | 默认结果 | Markdown 模式 |
+| 手势 | 默认模式 | Markdown 模式 |
 | --- | --- | --- |
-| `Enter` | 插入软换行，**不发送** | 换行，并自动延续上一行的列表 / 引用标记 |
-| 点击发送按钮 | 发送 | 发送 |
-| `Shift + Enter` | 不再是换行键；被「屏蔽所有键盘发送」一并接管为换行 | 同左 |
-| `Ctrl / Cmd / Alt + Enter` | 同上，也不发送 | 同上 |
+| `Enter` | 发送（DSH 原版） | 插入换行，并自动延续上一行的列表 / 引用标记 |
+| `Shift + Enter` | 换行（DSH 原版） | 换行（同左） |
+| `Ctrl / Cmd + Enter` | 发送（DSH 原版） | 也被改写成换行，不会发出消息 |
+| 点击发送按钮 | 发送 | 发送（Markdown 模式下唯一发送方式） |
 
-- 设置里关掉**总开关**后，插件完全不接管键盘——输入框、快捷键立刻回到 DSH 原生行为（这就是「关闭模式即复原」）。
+- **默认模式一个字节都不拦**：插件在捕获监听的第一道守卫就 `return`，`preventDefault` 都不会调，DSH 的 Enter 发送 / Shift+Enter 换行 / Ctrl+Enter 发送原样保留。
+- 设置里关掉**总开关**，任何模式下插件都完全不接管键盘。
 - 输入法组合中（`isComposing` / `keyCode 229`）不接管，中文、日文输入不会被打断。
 - `/` 斜杠命令与 `@` 提及菜单打开时不接管，`Enter` 仍然是「选中当前候选」；Markdown 辅助键也一并放行。
 - 长按不重复触发；只在 `keydown` 首次触发时动作。
@@ -25,8 +26,8 @@ DSH 内核把 `Enter`、`Shift + Enter`、`Ctrl / Cmd + Enter` 这三组注册�
 
 | 模式 | 说明 |
 | --- | --- |
-| `默认` | Enter 换行、发送只能点击。输入框仍是 DSH 原来的 contenteditable，只是手势被改写。 |
-| `Markdown` | 在默认行为之上，增加一组 Markdown 输入辅助，并在输入框下方渲染只读实时预览。 |
+| `默认` | 与 DSH 原版完全一致：Enter 发送、Shift + Enter 换行、Ctrl / Cmd + Enter 发送。插件不拦任何键。 |
+| `Markdown` | 整个输入框展开成沉浸编辑窗：左边是 DSH 原来的 contenteditable，右边是它的实时渲染；发送只能点按钮；外加一组 Markdown 输入辅助。 |
 
 Markdown 模式下多出来的按键（只在焦点位于输入框、且 `/` 或 `@` 菜单没打开时生效）：
 
@@ -41,7 +42,16 @@ Markdown 模式下多出来的按键（只在焦点位于输入框、且 `/` 或
 
 列表续行：在 `- `、`1. `、`- [ ] `、`> ` 结尾的行上按 Enter，下一行会自动补上同名标记；在**空条目**上再按一次 Enter 则结束这个列表（不会留下一个空标记）。
 
-预览是只读的，挂在 `conversation.composer.dock` 槽，支持标题、引用、代码块、分隔线、有序 / 无序 / 任务列表、加粗 / 斜体 / 行内代码 / 链接（只放行 `http(s)`）。草稿为空时自动隐藏。
+### 沉浸编辑窗
+
+Markdown 模式下插件把信封撑开：卡片高度抬到 `320px`，输入框占左半边，右半边是同一份文本的实时渲染。两块是**同一份草稿、两种视图**——不是另开一个面板。
+
+- 右上角三颗按钮：`渲染` / `源码` / `收起沉浸`。
+- `源码` 让输入框临时占满整行，方便贴长文。
+- `收起沉浸` 只关掉放大效果，Markdown 模式本身还在（设置里可以再打开）。
+- 渲染侧点一下会把焦点交回输入框，接着打字。
+
+渲染支持标题、引用、代码块、分隔线、有序 / 无序 / 任务列表、加粗 / 斜体 / 行内代码 / 链接（只放行 `http(s)`）。
 
 ## 技术做法
 
@@ -50,7 +60,7 @@ Markdown 模式下多出来的按键（只在焦点位于输入框、且 `/` 或
 1. Lexical 把 `keydown` 挂在 contenteditable 根节点（冒泡阶段），再派发 `KEY_ENTER_COMMAND`，composer 的处理器在那里 `preventDefault()` 并提交。
 2. `ShortcutsService` 把 `keydown` 挂在 `window` **冒泡阶段**派发可配置命令，捕获回调只做固定序列复位。
 
-捕获阶段 `preventDefault() + stopImmediatePropagation()` 同时切断默认行为和后续传播，两条发送路径都不会被触达。插件的监听器第一步就检查总开关，关掉时直接 `return`，事件原样落到内核手里。
+捕获阶段 `preventDefault() + stopImmediatePropagation()` 同时切断默认行为和后续传播，两条发送路径都不会被触达。守卫顺序是：总开关 → 模式不是 Markdown 就返回 → 输入法组合 / 已被处理 → 不在输入框内 → `/` `@` 菜单打开 → 自定义发送键 → 自定义换行键 → Markdown 辅助键 → 屏蔽键盘发送。
 
 换行本身不做 DOM 手术，而是向输入框补发一次 **合成的 `Shift + Enter`** `keydown`：
 
@@ -70,7 +80,9 @@ const span = state.actions.captureInsertion();      // { ...caretSpan, draftRev 
 state.actions.insertText('## ', span);              // draftRev 不匹配就返回 false
 ```
 
-`state.actions` 来自 `conversation.composer.dock` 槽注入的 `inputActions`。走这条路，撤销栈和草稿持久化都由 DSH 保持一致。只有在拿不到 `inputActions` 时，才退化成 `document.execCommand('insertText', ...)`。
+`state.actions` 来自 `conversation.input.overlay` 槽注入的 `inputActions`。走这条路，撤销栈和草稿持久化都由 DSH 保持一致。只有在拿不到 `inputActions` 时，才退化成 `document.execCommand('insertText', ...)`。
+
+沉浸放大不碰任何哈希类名：卡片本身 `position: relative`，DSH 的滚动容器写的是 `max-height: var(--dsh-composer-text-max-height)`，所以插件只改这个 CSS 变量，再给 `body` 挂 `dcs-immersive` 类。
 
 ## 自定义
 
@@ -83,19 +95,19 @@ state.actions.insertText('## ', span);              // draftRev 不匹配就返�
 | 按键映射 | 「发送消息」「插入换行」两行，各带 *录制 / 清除 / 取消* |
 | 行为 | 「屏蔽所有键盘发送」：连 `Ctrl / Cmd + Enter` 也换成换行 |
 | Markdown 输入辅助 | 上面那张按键表的只读说明 |
-| 预览 | 就是切到 Markdown 模式的另一个入口 |
+| 沉浸编辑窗 | 开关；只有 Markdown 模式才会展开 |
 
 录制时按 Esc 取消，纯修饰键会被忽略，两个动作不能共用同一组合键。
 
 配置存在 `localStorage['dsh.composer-studio.v1']`，落盘形状：
 
 ```json
-{ "enabled": true, "mode": "default",
+{ "enabled": true, "mode": "markdown", "immersive": true,
   "bindings": { "newline": { "code": "Enter", "shift": false, "...": "..." }, "send": null },
   "blockKeyboardSend": true }
 ```
 
-`send: null` 表示「没有键盘发送，只能点击」。旧版本的 `dsh.composer-keys.v1` 会被自动读取并迁移。改完立即生效，不需要刷新。
+`send: null` 表示「没有键盘发送，只能点击」；`immersive: false` 表示 Markdown 模式不加宽输入框。旧版本的 `dsh.composer-keys.v1` 会被自动读取并迁移。改完立即生效，不需要刷新。
 
 其余快捷键仍然在「设置 → 通用 → 快捷键」里改——那是 DSH 自带的可编辑快捷键面板，本插件不动它。
 
@@ -106,10 +118,10 @@ state.actions.insertText('## ', span);              // draftRev 不匹配就返�
 | `package.json` | 包清单：`dsh.bundle.patch` + `dsh.client`（`platform: web`、`immediately: true`） |
 | `cordis.patch.yml` | 往 profile 里 insert 一条 `dsh-composer-studio` |
 | `index.js` | Host 半边，空实现（只为让 bundle patch 能挂载） |
-| `client.js` | 全部逻辑：捕获监听、合成换行、Markdown 辅助、预览、设置面板 |
+| `client.js` | 全部逻辑：捕获监听、合成换行、Markdown 辅助、沉浸渲染、设置面板 |
 | `locale/zh.json`、`locale/en.json` | 包级文案（面板文案在 `client.js` 的 `DICT` 里） |
 | `icon.svg` | 设置页图标 |
-| `test/harness.cjs` | 离线测试台，假 DOM 里跑 19 条用例 |
+| `test/harness.cjs` | 离线测试台，假 DOM 里跑 20 条用例 |
 | `LICENSE` | MIT |
 | `PUBLISHING.md` | 发到 GitHub / npm / 插件市场的操作步骤 |
 
@@ -133,15 +145,16 @@ dsh plugin --profile <profile> add github:<owner>/dsh-composer-studio
 
 ```bash
 node --check client.js        # 语法
-node test/harness.cjs         # 19/19 passed
+node test/harness.cjs         # 20/20 passed
 ```
 
-在线验证用 cordis Inspect 查 `settings.section` 的 occupants 里有没有 `composer-studio`，可以确认插件确实被页面加载。真实按键行为需要人在 GUI 里按一次。
+在线验证用 cordis Inspect 查 `settings.section` 的 occupants 里有没有 `composer-studio`、`conversation.input.overlay` 里有没有 `composer-studio-immersive`，可以确认插件确实被页面加载。真实按键行为需要人在 GUI 里按一次。
 
 ## 已知边界
 
 - 快捷键录制只识别 `code`（物理键位），与 DSH 自己的快捷键服务一致；同一物理键在不同键盘布局下映射到不同字符是预期行为。
 - 「屏蔽所有键盘发送」只拦 `Enter` 及其修饰组合，不会拦截点击或是其他提交入口。
-- Markdown 预览是**只读渲染**，不在输入框里做富文本编辑：输入框始终是 DSH 自己的 contenteditable，这样 `/`、`@`、撤销栈、组合输入、草稿持久化都不用另造一套。
-- 预览的渲染器是刻意做小的（约 170 行）：只覆盖对话里真正会用到的语法，不追求 CommonMark 全兼容。
-- 插件不读别的插件的 DOM，只认内核自己打的标记：`[data-composer-input]`、`[data-composer-card]`、`button[aria-busy]`、`[data-trigger-menu]`。
+- 沉浸编辑窗不改写输入框：左边始终是 DSH 自己的 contenteditable，这样 `/`、`@`、撤销栈、组合输入、草稿持久化都不用另造一套。渲染侧是**只读**的。
+- 渲染器是刻意做小的（约 170 行）：只覆盖对话里真正会用到的语法，不追求 CommonMark 全兼容。
+- 沉浸布局依赖 `--dsh-composer-text-max-height` 这个变量；内核若改名，输入框会退化成正常高度，其余功能不受影响。
+- 插件不读别的插件的 DOM，只认内核自己打的标记：`[data-composer-input]`、`[data-composer-card]`、`[data-composer-overlay]`、`button[aria-busy]`、`[data-trigger-menu]`。

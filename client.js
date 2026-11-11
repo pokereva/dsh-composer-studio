@@ -12,8 +12,15 @@ window.__ModuleLoader__.load({
     const LEGACY_KEY = 'dsh.composer-keys.v1';
     const STYLE_ID = 'dsh-composer-studio/section.css';
     const SECTION_ID = 'composer-studio';
-    const DOCK_SLOT = 'conversation.composer.dock';
-    const DOCK_ID = 'composer-studio-preview';
+    /**
+     * 沉浸编辑窗挂在 overlay 槽里：它渲染在 composer 卡片内部
+     * （div[data-composer-overlay]），卡片本身就是 position: relative，
+     * 所以整块面板可以严丝合缝地盖在输入框上，而不是在下面另起一块。
+     */
+    const OVERLAY_SLOT = 'conversation.input.overlay';
+    const OVERLAY_ID = 'composer-studio-immersive';
+    /** 沉浸状态下给 body 打的标记，卡片放大与面板定位全靠它。 */
+    const IMMERSIVE_CLASS = 'dcs-immersive';
 
     const MODE_DEFAULT = 'default';
     const MODE_MARKDOWN = 'markdown';
@@ -21,10 +28,13 @@ window.__ModuleLoader__.load({
     const TAB_TEXT = '  ';
 
     /**
-     * 默认值就是最初的需求：
-     *   - 发送：null —— 没有键盘发送，只能点发送按钮
-     *   - 换行：Enter —— 裸 Enter 在光标处换行
-     * 于是输入框就是一个真正的多行文本框。
+     * 这两条绑定只在 Markdown 模式下生效。
+     * 默认模式一根手指都不碰：Enter 发送、Shift + Enter 换行、Ctrl / Cmd + Enter
+     * 发送，全部是 DSH 原样，插件连 preventDefault 都不会调。
+     *
+     * Markdown 模式是写作模式：
+     *   - 换行：Enter（裸 Enter 只换行，写 md 时不会手滑把消息发出去）
+     *   - 发送：null —— 只能点发送按钮
      */
     const DEFAULT_BINDINGS = {
       newline: { code: 'Enter', alt: false, ctrl: false, meta: false, shift: false },
@@ -34,6 +44,7 @@ window.__ModuleLoader__.load({
     const DEFAULT_BLOCK_KEYBOARD_SEND = true;
     const DEFAULT_ENABLED = true;
     const DEFAULT_MODE = MODE_DEFAULT;
+    const DEFAULT_IMMERSIVE = true;
 
     const CODE_LABELS = {
       Enter: 'Enter',
@@ -99,15 +110,15 @@ window.__ModuleLoader__.load({
         nav: '输入框工作室',
         heading: '输入框工作室',
         intro:
-          'DSH 把 Enter 固定成「发送」、Shift + Enter 固定成「换行」，两者都不允许改，输入框也不支持 Markdown。这个插件在捕获阶段接管键盘，把发送改成只能点击，并可选地加上 Markdown 写作模式。',
+          'DSH 把 Enter 固定成「发送」、Shift + Enter 固定成「换行」，输入框也不支持 Markdown。默认模式下本插件什么都不改；切到 Markdown 模式后，整个输入框会变成沉浸编辑窗，边写边渲染，发送改成只能点按钮。',
         cardMaster: '总开关',
         masterTitle: '启用输入框工作室',
         masterDesc: '关闭后完全不接管键盘，输入框和快捷键立刻恢复 DSH 原生行为。',
         cardMode: '模式',
         modeDefault: '默认',
         modeMarkdown: 'Markdown',
-        modeDefaultDesc: 'Enter 换行，发送只能点击。',
-        modeMarkdownDesc: '在默认行为之上，增加 Markdown 输入辅助和输入框下方的实时预览。',
+        modeDefaultDesc: '与 DSH 原版完全一致：Enter 发送、Shift + Enter 换行、Ctrl / Cmd + Enter 发送，插件不拦任何键。',
+        modeMarkdownDesc: '整个输入框变成沉浸编辑窗，边写边渲染 Markdown；发送只能点按钮。',
         cardKeys: '按键映射',
         sendTitle: '发送消息',
         sendDesc: '没有快捷键时只能点击发送按钮；也可以录制一个组合键。',
@@ -120,11 +131,11 @@ window.__ModuleLoader__.load({
         recording: '请按组合键…',
         cancel: '取消',
         reset: '恢复默认',
-        resetHint: '默认：Enter 换行，发送只能点击，模式为默认。',
+        resetHint: '默认：模式为默认，Markdown 模式下 Enter 换行、发送只能点击。',
         duplicate: '这两个动作不能使用同一个组合键。',
         cardBehaviour: '行为',
         blockTitle: '屏蔽所有键盘发送',
-        blockDesc: '连 Ctrl + Enter、Cmd + Enter 也不发送，一律换成插入换行。',
+        blockDesc: '连 Ctrl + Enter、Cmd + Enter 也不发送，一律换成插入换行。只影响 Markdown 模式。',
         cardMdKeys: 'Markdown 输入辅助',
         mdKeysIntro: '只在 Markdown 模式下、焦点在输入框里时生效。斜杠命令与 @ 提及菜单打开时一律放行，优先级交给菜单。',
         mdTab: 'Tab',
@@ -141,10 +152,15 @@ window.__ModuleLoader__.load({
         mdInlineDesc: '加粗、斜体、行内代码（有选中内容时包裹它）',
         mdContinue: 'Enter',
         mdContinueDesc: '换行的同时自动延续上一行的列表或引用标记',
-        cardPreview: '预览',
-        previewTitle: '输入框下方实时预览',
-        previewDesc: '在 Markdown 模式下把当前草稿渲染成只读预览；关闭插件或切到默认模式时立即隐藏。',
-        previewEmpty: '草稿为空时不显示预览。',
+        cardImmersive: '沉浸编辑窗',
+        immersiveTitle: '把输入框放大成沉浸编辑窗',
+        immersiveDesc: 'Markdown 模式下整个输入框卡片会展开成一块大画布，边写边渲染；点一下画布就能继续输入，切到「源码」可以看见光标。',
+        immersiveNote: '只有 Markdown 模式才会展开；默认模式下输入框保持原样。',
+        viewRendered: '渲染',
+        viewSource: '源码',
+        immersiveEmpty: '开始输入，这里会实时渲染 Markdown。',
+        immersiveExit: '收起沉浸',
+        immersiveHint: '点击继续输入',
         cardMore: '其他快捷键',
         moreHint:
           '其余快捷键在「设置 → 通用 → 快捷键」里改。那里列出的 Enter、Shift + Enter、Ctrl + Enter 属于固定输入，只在这里才能调整。',
@@ -153,15 +169,17 @@ window.__ModuleLoader__.load({
         nav: 'Composer Studio',
         heading: 'Composer Studio',
         intro:
-          'DSH hard-codes Enter as send, Shift + Enter as newline, and the composer has no Markdown support. This plugin claims the keyboard during the capture phase so sending becomes click-only, with an optional Markdown writing mode on top.',
+          'DSH hard-codes Enter as send and Shift + Enter as newline, and the composer has no Markdown support. Default mode changes nothing at all; switch to Markdown mode and the whole composer turns into an immersive editor that renders as you type, with sending moved to the button.',
         cardMaster: 'Master switch',
         masterTitle: 'Enable Composer Studio',
         masterDesc: 'When off, nothing is intercepted and the composer behaves exactly like stock DSH.',
         cardMode: 'Mode',
         modeDefault: 'Default',
         modeMarkdown: 'Markdown',
-        modeDefaultDesc: 'Enter inserts a line break; sending is click-only.',
-        modeMarkdownDesc: 'Adds Markdown input helpers and a live preview below the composer.',
+        modeDefaultDesc:
+          'Exactly like stock DSH: Enter sends, Shift + Enter inserts a line break, Ctrl / Cmd + Enter sends. Nothing is intercepted.',
+        modeMarkdownDesc:
+          'The whole composer becomes an immersive editor that renders Markdown as you type; sending is click-only.',
         cardKeys: 'Key bindings',
         sendTitle: 'Send message',
         sendDesc: 'With no shortcut, sending requires a click on the send button.',
@@ -174,11 +192,12 @@ window.__ModuleLoader__.load({
         recording: 'Press a combination…',
         cancel: 'Cancel',
         reset: 'Restore defaults',
-        resetHint: 'Defaults: Enter inserts a line break, sending is click-only, default mode.',
+        resetHint: 'Defaults: default mode; in Markdown mode Enter inserts a line break and sending is click-only.',
         duplicate: 'The two actions cannot share one combination.',
         cardBehaviour: 'Behaviour',
         blockTitle: 'Block every keyboard send',
-        blockDesc: 'Ctrl + Enter and Cmd + Enter also insert a line break instead of sending.',
+        blockDesc:
+          'Ctrl + Enter and Cmd + Enter also insert a line break instead of sending. Markdown mode only.',
         cardMdKeys: 'Markdown helpers',
         mdKeysIntro:
           'Only while Markdown mode is on and the composer has focus. When the slash or @ menu is open, every key is passed through to the menu.',
@@ -196,11 +215,16 @@ window.__ModuleLoader__.load({
         mdInlineDesc: 'Bold, italic, inline code (wraps the selection when there is one)',
         mdContinue: 'Enter',
         mdContinueDesc: 'Insert a line break and continue the list or quote marker above',
-        cardPreview: 'Preview',
-        previewTitle: 'Live preview below the composer',
-        previewDesc:
-          'In Markdown mode the current draft is rendered as a read-only preview; it disappears when the plugin is off or the mode is Default.',
-        previewEmpty: 'Nothing to preview while the draft is empty.',
+        cardImmersive: 'Immersive editor',
+        immersiveTitle: 'Expand the composer into an immersive editor',
+        immersiveDesc:
+          'In Markdown mode the whole composer card opens up into a large canvas that renders as you type. Click the canvas to keep typing, or switch to Source to see the caret.',
+        immersiveNote: 'Only Markdown mode expands the composer; Default mode leaves it untouched.',
+        viewRendered: 'Rendered',
+        viewSource: 'Source',
+        immersiveEmpty: 'Start typing — Markdown is rendered here as you go.',
+        immersiveExit: 'Collapse',
+        immersiveHint: 'Click to keep typing',
         cardMore: 'Other shortcuts',
         moreHint:
           'Every other shortcut lives in Settings → General → Shortcuts. The Enter, Shift + Enter and Ctrl + Enter entries listed there are fixed input and can only be changed here.',
@@ -240,24 +264,69 @@ window.__ModuleLoader__.load({
 .dck-kv code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 2px 6px; border-radius: 5px; background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.06)); white-space: nowrap; }
 .dck-kv span { font-size: 12px; color: var(--dsw-alias-label-secondary, #6b7280); }
 
-.dcp-preview { margin: 6px 0 0; padding: 10px 12px; max-height: 220px; overflow: auto; border: 1px dashed var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.14)); border-radius: var(--dsw-radius-lg, 12px); background: var(--dsw-alias-bg-layer-1, transparent); font-size: 13px; line-height: 1.65; }
-.dcp-label { display: block; margin-bottom: 6px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dsw-alias-label-secondary, #6b7280); }
-.dcp-preview p { margin: 0 0 6px; }
-.dcp-preview p:last-child { margin-bottom: 0; }
-.dcp-preview h1, .dcp-preview h2, .dcp-preview h3, .dcp-preview h4, .dcp-preview h5, .dcp-preview h6 { margin: 8px 0 4px; line-height: 1.35; }
-.dcp-preview h1 { font-size: 19px; }
-.dcp-preview h2 { font-size: 17px; }
-.dcp-preview h3 { font-size: 15px; }
-.dcp-preview h4, .dcp-preview h5, .dcp-preview h6 { font-size: 13px; }
-.dcp-preview ul, .dcp-preview ol { margin: 4px 0 6px; padding-left: 22px; }
-.dcp-preview li { margin: 2px 0; }
-.dcp-preview blockquote { margin: 6px 0; padding: 2px 0 2px 10px; border-left: 3px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.16)); color: var(--dsw-alias-label-secondary, #6b7280); }
-.dcp-preview pre { margin: 6px 0; padding: 8px 10px; border-radius: var(--dsw-radius-md, 8px); background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.06)); overflow-x: auto; }
-.dcp-preview pre code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.dcp-preview :not(pre) > code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.06)); }
-.dcp-preview hr { margin: 8px 0; border: 0; border-top: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.14)); }
-.dcp-preview a { color: var(--dsw-alias-brand-primary, #247bbf); text-decoration: none; }
-.dcp-preview a:hover { text-decoration: underline; }
+/* ── 沉浸编辑窗 ───────────────────────────────────────────────────── */
+
+/* 画布高度：卡片和渲染面板共用同一个值，两边永远对齐。
+   卡片多留 var(--dcs-row) 给底部的工具行，面板才不会压住发送按钮。
+   --dcs-pad 对齐卡片自己的 padding-top: 8px（内核写的），渲染面板从这里开始。 */
+:root { --dcs-canvas: 340px; --dcs-row: 52px; --dcs-pad: 8px; }
+
+body.dcs-immersive [data-composer-card] {
+  /* DSH 自己的滚动容器写的就是 max-height: var(--dsh-composer-text-max-height)，
+     所以直接改这个变量，不用去碰任何哈希类名。 */
+  --dsh-composer-text-max-height: var(--dcs-canvas);
+  /* 只是兜底：真正把卡片撑开的是输入框的 min-height，内容比画布长时交给滚动条。 */
+  min-height: var(--dcs-canvas);
+}
+body.dcs-immersive [data-composer-card] [data-composer-input] {
+  min-height: var(--dcs-canvas);
+  width: calc(50% - 3px);
+  max-width: none;
+}
+body.dcs-immersive.dcs-source [data-composer-card] [data-composer-input] { width: 100%; }
+
+.dcs-pane {
+  position: absolute;
+  top: var(--dcs-pad);
+  right: 0;
+  width: calc(50% - 3px);
+  height: var(--dcs-canvas);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  background: var(--dsw-specific-input-major, var(--dsw-alias-bg-layer-1, transparent));
+  border-radius: var(--dsw-radius-md, 8px);
+  overflow: hidden;
+  z-index: 2;
+}
+.dcs-pane[data-view='source'] { display: none; }
+.dcs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.06)); }
+.dcs-title { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dsw-alias-label-secondary, #6b7280); }
+.dcs-tools { display: flex; align-items: center; gap: 6px; }
+.dcs-tab { font: inherit; font-size: 11px; line-height: 1; padding: 5px 9px; border-radius: var(--dsw-radius-md, 8px); border: 1px solid transparent; background: transparent; color: var(--dsw-alias-label-secondary, #6b7280); cursor: pointer; }
+.dcs-tab[data-active='true'] { border-color: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12)); background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.06)); color: var(--dsw-alias-label-primary, inherit); }
+.dcs-tab:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, #247bbf); outline-offset: 1px; }
+.dcs-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px 14px; font-size: var(--dsh-content-font-size, 13px); line-height: 1.68; cursor: text; }
+.dcs-empty { margin: 0; color: var(--dsw-alias-label-secondary, #6b7280); font-size: 12px; }
+.dcs-count { font-size: 11px; color: var(--dsw-alias-label-secondary, #6b7280); }
+
+.dcs-md p { margin: 0 0 8px; }
+.dcs-md p:last-child { margin-bottom: 0; }
+.dcs-md h1, .dcs-md h2, .dcs-md h3, .dcs-md h4, .dcs-md h5, .dcs-md h6 { margin: 14px 0 6px; line-height: 1.35; }
+.dcs-md h1:first-child, .dcs-md h2:first-child, .dcs-md h3:first-child { margin-top: 0; }
+.dcs-md h1 { font-size: 21px; }
+.dcs-md h2 { font-size: 18px; }
+.dcs-md h3 { font-size: 16px; }
+.dcs-md h4, .dcs-md h5, .dcs-md h6 { font-size: 14px; }
+.dcs-md ul, .dcs-md ol { margin: 6px 0 8px; padding-left: 24px; }
+.dcs-md li { margin: 3px 0; }
+.dcs-md blockquote { margin: 8px 0; padding: 2px 0 2px 12px; border-left: 3px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.16)); color: var(--dsw-alias-label-secondary, #6b7280); }
+.dcs-md pre { margin: 8px 0; padding: 10px 12px; border-radius: var(--dsw-radius-md, 8px); background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.06)); overflow-x: auto; }
+.dcs-md pre code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.dcs-md :not(pre) > code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--dsw-alias-bg-layer-2, rgba(0, 0, 0, 0.06)); }
+.dcs-md hr { margin: 10px 0; border: 0; border-top: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.14)); }
+.dcs-md a { color: var(--dsw-alias-brand-primary, #247bbf); text-decoration: none; }
+.dcs-md a:hover { text-decoration: underline; }
 `;
 
     function ensureStyles() {
@@ -279,6 +348,7 @@ window.__ModuleLoader__.load({
       return {
         enabled: DEFAULT_ENABLED,
         mode: DEFAULT_MODE,
+        immersive: DEFAULT_IMMERSIVE,
         bindings: { newline: { ...DEFAULT_BINDINGS.newline }, send: null },
         blockKeyboardSend: DEFAULT_BLOCK_KEYBOARD_SEND,
       };
@@ -311,6 +381,7 @@ window.__ModuleLoader__.load({
         return {
           enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : DEFAULT_ENABLED,
           mode: parsed.mode === MODE_MARKDOWN ? MODE_MARKDOWN : MODE_DEFAULT,
+          immersive: typeof parsed.immersive === 'boolean' ? parsed.immersive : DEFAULT_IMMERSIVE,
           bindings: {
             newline: normalizeBinding(bindings.newline, DEFAULT_BINDINGS.newline),
             send: normalizeBinding(bindings.send, null),
@@ -359,6 +430,7 @@ window.__ModuleLoader__.load({
       return {
         enabled: state.enabled,
         mode: state.mode,
+        immersive: state.immersive,
         bindings: state.bindings,
         blockKeyboardSend: state.blockKeyboardSend,
       };
@@ -367,6 +439,7 @@ window.__ModuleLoader__.load({
     function commitSettings(next) {
       state.enabled = next.enabled !== false;
       state.mode = next.mode === MODE_MARKDOWN ? MODE_MARKDOWN : MODE_DEFAULT;
+      state.immersive = next.immersive !== false;
       state.bindings = next.bindings;
       state.blockKeyboardSend = next.blockKeyboardSend === true;
       writeSettings(snapshot());
@@ -659,10 +732,15 @@ window.__ModuleLoader__.load({
      * window 捕获阶段早于上面两者。preventDefault 断掉浏览器默认行为，
      * stopImmediatePropagation 让事件再也到不了那两个监听器，于是不会有任何发送路径；
      * 需要换行时再自己补发一次合成 Shift+Enter。
+     *
+     * 默认模式下这个函数直接返回：一个字节都不拦，DSH 原生的
+     * Enter 发送 / Shift + Enter 换行 / Ctrl + Cmd + Enter 发送原样保留。
      */
     function onKeyDownCapture(event) {
       if (state.suspended || state.synthetic) return;
       if (state.enabled !== true) return;
+      // 只有 Markdown 模式才改键盘语义；默认模式必须和原版一模一样。
+      if (state.mode !== MODE_MARKDOWN) return;
       if (event.defaultPrevented || isTypingGesture(event)) return;
       const root = composerRoot(event.target);
       if (root === null) return;
@@ -683,7 +761,7 @@ window.__ModuleLoader__.load({
         event.preventDefault();
         event.stopImmediatePropagation();
         if (event.repeat) return;
-        const continuation = state.mode === MODE_MARKDOWN ? markdownContinuation(root) : null;
+        const continuation = markdownContinuation(root);
         insertLineBreak(root);
         if (continuation !== null) {
           // 换行是 Lexical 的异步更新，等它落定再补标记。
@@ -692,7 +770,7 @@ window.__ModuleLoader__.load({
         return;
       }
 
-      if (state.mode === MODE_MARKDOWN && handleMarkdownKey(event, root)) return;
+      if (handleMarkdownKey(event, root)) return;
 
       // 没有任何快捷键能发送时，带修饰键的 Enter 也拦下来换成换行，
       // 否则 Ctrl/Cmd/Alt + Enter 仍会走 DSH 的固定输入把消息发出去。
@@ -700,7 +778,7 @@ window.__ModuleLoader__.load({
         event.preventDefault();
         event.stopImmediatePropagation();
         if (event.repeat) return;
-        const continuation = state.mode === MODE_MARKDOWN ? markdownContinuation(root) : null;
+        const continuation = markdownContinuation(root);
         insertLineBreak(root);
         if (continuation !== null) {
           window.setTimeout(() => insertIntoComposer(continuation), 0);
@@ -885,14 +963,43 @@ window.__ModuleLoader__.load({
       return blocks;
     }
 
-    /* ── 输入框下方预览 ───────────────────────────────────────────────── */
+    /* ── 沉浸编辑窗（渲染面板） ───────────────────────────────────────── */
 
-    function ComposerStudioPreview(props) {
+    /** apply() 里把 locale 的 t 绑到这里，组件才能拿到文案。 */
+    let translate = (key) => key;
+
+    function focusComposer() {
+      if (typeof document === 'undefined') return;
+      const root = document.querySelector('[data-composer-input]');
+      if (root !== null && typeof root.focus === 'function') root.focus();
+    }
+
+    function setImmersive(next) {
+      const current = snapshot();
+      commitSettings({
+        enabled: current.enabled,
+        mode: current.mode,
+        immersive: next,
+        bindings: current.bindings,
+        blockKeyboardSend: current.blockKeyboardSend,
+      });
+    }
+
+    /**
+     * 这个面板挂在 conversation.input.overlay 上，渲染进 composer 卡片内部的
+     * div[data-composer-overlay]。卡片自己是 position: relative，所以面板只要
+     * 绝对定位就能严丝合缝地贴在卡片右侧，而不是在输入框下面另起一块。
+     *
+     * 左侧仍然是 DSH 原来那个 contenteditable（光标、撤销、斜杠命令、@ 提及
+     * 全都还在），右侧是它的实时渲染结果——同一份文本，两种视图。
+     */
+    function ComposerStudioImmersive(props) {
       const actions = props === undefined ? null : props.inputActions;
       if (actions !== undefined && actions !== null) state.actions = actions;
 
       const [draft, setDraftText] = useState(state.draft);
       const [settings, setSettingsView] = useState(snapshot);
+      const [view, setView] = useState('split');
 
       useEffect(() => {
         const offDraft = onDraftChange(() => setDraftText(state.draft));
@@ -905,16 +1012,76 @@ window.__ModuleLoader__.load({
         };
       }, []);
 
-      const visible = settings.enabled && settings.mode === MODE_MARKDOWN;
-      if (!visible) return null;
+      const active =
+        settings.enabled === true && settings.mode === MODE_MARKDOWN && settings.immersive === true;
+
+      // 卡片放大、编辑区收窄，全靠 body 上的这两个 class。
+      useEffect(() => {
+        if (typeof document === 'undefined') return undefined;
+        const body = document.body;
+        body.classList.toggle(IMMERSIVE_CLASS, active);
+        body.classList.toggle('dcs-source', active && view === 'source');
+        return () => {
+          body.classList.remove(IMMERSIVE_CLASS);
+          body.classList.remove('dcs-source');
+        };
+      }, [active, view]);
+
+      if (!active) return null;
+
+      const t = translate;
       const text = typeof draft === 'string' ? draft : '';
-      if (text.trim() === '') return null;
+      const empty = text.trim() === '';
 
       return h(
         'div',
-        { className: 'dcp-preview', 'data-composer-preview': 'true' },
-        h('span', { className: 'dcp-label' }, 'Markdown'),
-        h(Fragment, null, renderMarkdown(text, 'dcp')),
+        {
+          className: 'dcs-pane',
+          'data-composer-immersive': 'true',
+          'data-view': view === 'source' ? 'source' : 'split',
+        },
+        h(
+          'div',
+          { className: 'dcs-head' },
+          h('span', { className: 'dcs-title' }, 'Markdown'),
+          h(
+            'div',
+            { className: 'dcs-tools' },
+            h('span', { className: 'dcs-count' }, `${text.length}`),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'dcs-tab',
+                'data-active': view === 'split' ? 'true' : 'false',
+                onClick: () => setView('split'),
+              },
+              t('viewRendered'),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'dcs-tab',
+                'data-active': view === 'source' ? 'true' : 'false',
+                onClick: () => setView('source'),
+              },
+              t('viewSource'),
+            ),
+            h(
+              'button',
+              { type: 'button', className: 'dcs-tab', onClick: () => setImmersive(false) },
+              t('immersiveExit'),
+            ),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dcs-body', onClick: focusComposer },
+          empty
+            ? h('p', { className: 'dcs-empty' }, t('immersiveEmpty'))
+            : h('div', { className: 'dcs-md' }, renderMarkdown(text, 'dcs')),
+        ),
       );
     }
 
@@ -1013,6 +1180,7 @@ window.__ModuleLoader__.load({
           save({
             enabled: current.enabled,
             mode: current.mode,
+            immersive: current.immersive,
             bindings: { ...current.bindings, [action]: binding },
             blockKeyboardSend: current.blockKeyboardSend,
           });
@@ -1070,6 +1238,7 @@ window.__ModuleLoader__.load({
               save({
                 enabled: checked,
                 mode: live.current.mode,
+                immersive: live.current.immersive,
                 bindings: live.current.bindings,
                 blockKeyboardSend: live.current.blockKeyboardSend,
               }),
@@ -1102,6 +1271,7 @@ window.__ModuleLoader__.load({
                     save({
                       enabled: live.current.enabled,
                       mode: MODE_DEFAULT,
+                      immersive: live.current.immersive,
                       bindings: live.current.bindings,
                       blockKeyboardSend: live.current.blockKeyboardSend,
                     }),
@@ -1118,6 +1288,7 @@ window.__ModuleLoader__.load({
                     save({
                       enabled: live.current.enabled,
                       mode: MODE_MARKDOWN,
+                      immersive: live.current.immersive,
                       bindings: live.current.bindings,
                       blockKeyboardSend: live.current.blockKeyboardSend,
                     }),
@@ -1175,6 +1346,7 @@ window.__ModuleLoader__.load({
               save({
                 enabled: live.current.enabled,
                 mode: live.current.mode,
+                immersive: live.current.immersive,
                 bindings: live.current.bindings,
                 blockKeyboardSend: checked,
               }),
@@ -1192,20 +1364,21 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dck-card' },
-          h('div', { className: 'dck-card-title' }, t('cardPreview')),
+          h('div', { className: 'dck-card-title' }, t('cardImmersive')),
           h(SwitchRow, {
-            title: t('previewTitle'),
-            desc: t('previewDesc'),
-            checked: settings.mode === MODE_MARKDOWN && enabled,
+            title: t('immersiveTitle'),
+            desc: t('immersiveDesc'),
+            checked: settings.immersive,
             onChange: (checked) =>
               save({
                 enabled: live.current.enabled,
-                mode: checked ? MODE_MARKDOWN : MODE_DEFAULT,
+                mode: live.current.mode,
+                immersive: checked,
                 bindings: live.current.bindings,
                 blockKeyboardSend: live.current.blockKeyboardSend,
               }),
           }),
-          h('div', { className: 'dck-row' }, h('div', { className: 'dck-text' }, h('span', null, t('previewEmpty')))),
+          h('div', { className: 'dck-row' }, h('div', { className: 'dck-text' }, h('span', null, t('immersiveNote')))),
         ),
 
         h(
@@ -1255,6 +1428,7 @@ window.__ModuleLoader__.load({
             const next = readSettings();
             state.enabled = next.enabled;
             state.mode = next.mode;
+            state.immersive = next.immersive;
             state.bindings = next.bindings;
             state.blockKeyboardSend = next.blockKeyboardSend;
             settingsListeners.forEach((listener) => listener());
@@ -1265,17 +1439,18 @@ window.__ModuleLoader__.load({
 
         ctx.effect(() => ctx.locale.register(NS, DICT), 'composer-studio: dictionaries');
 
+        const t = ctx.locale.bind(NS);
+        translate = t;
+
         // 方便在 DevTools 里核对当前生效状态。
         if (typeof window !== 'undefined') {
           window.__dshComposerStudio = {
             state,
             snapshot,
             defaults,
-            version: 2,
+            version: 3,
           };
         }
-
-        const t = ctx.locale.bind(NS);
 
         ctx.slots.inject('settings.section', () =>
           ctx.slots.register(
@@ -1291,14 +1466,14 @@ window.__ModuleLoader__.load({
           ),
         );
 
-        ctx.slots.inject(DOCK_SLOT, () =>
+        ctx.slots.inject(OVERLAY_SLOT, () =>
           ctx.slots.register(
             {
-              name: DOCK_SLOT,
-              id: DOCK_ID,
+              name: OVERLAY_SLOT,
+              id: OVERLAY_ID,
               order: 20,
             },
-            ComposerStudioPreview,
+            ComposerStudioImmersive,
           ),
         );
       },
