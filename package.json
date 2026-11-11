@@ -1,25 +1,27 @@
 {
-  "name": "@local/dsh-composer-keys",
-  "version": "1.0.0",
-  "description": "Turns the DSH message composer into a real text editor: Enter inserts a line break and sending happens by click. Both gestures can be remapped.",
+  "name": "@local/dsh-composer-studio",
+  "version": "2.0.0",
+  "description": "Turns the DSH message composer into a real editor: Enter only inserts a line break and sending happens by click, plus an optional Markdown writing mode with input helpers and a live preview. Everything can be switched off in one place.",
   "keywords": [
     "deepseek",
     "harness",
     "dsh",
     "dsh-plugin",
     "composer",
+    "editor",
+    "markdown",
     "keyboard",
     "shortcut"
   ],
   "license": "MIT",
   "author": "poker",
-  "homepage": "https://github.com/YOUR_GITHUB_USER/dsh-composer-keys#readme",
+  "homepage": "https://github.com/pokereva/dsh-composer-studio#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YOUR_GITHUB_USER/dsh-composer-keys.git"
+    "url": "git+https://github.com/pokereva/dsh-composer-studio.git"
   },
   "bugs": {
-    "url": "https://github.com/YOUR_GITHUB_USER/dsh-composer-keys/issues"
+    "url": "https://github.com/pokereva/dsh-composer-studio/issues"
   },
   "type": "module",
   "exports": {

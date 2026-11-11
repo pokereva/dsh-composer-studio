@@ -1,6 +1,6 @@
 # 发布指南 / Publishing
 
-这份文档是给仓库作者看的，记录把 `dsh-composer-keys` 上传到 GitHub、可选地发到 npm 与插件市场的步骤。
+这份文档是给仓库作者看的，记录把 `dsh-composer-studio` 上传到 GitHub、可选地发到 npm 与插件市场的步骤。
 
 ## 0. 已完成的部分
 
@@ -16,7 +16,7 @@ dd99a4b docs: MIT license, npm metadata, and click-only wording
 
 ## 1. 先把占位符换掉
 
-`package.json` 里有三处 `YOUR_GITHUB_USER`，替换成你的 GitHub 用户名（假设是 `poker`，仓库名 `dsh-composer-keys`）：
+`package.json` 里有三处 `YOUR_GITHUB_USER`，替换成你的 GitHub 用户名（假设是 `poker`，仓库名 `dsh-composer-studio`）：
 
 ```bash
 cd output/dsh-composer-textarea_11-11
@@ -29,7 +29,7 @@ sed -i 's/YOUR_GITHUB_USER/poker/g' package.json
 
 网页操作：<https://github.com/new>
 
-- Repository name: `dsh-composer-keys`
+- Repository name: `dsh-composer-studio`
 - Visibility: **Public**
 - **不要**勾选 Add a README / .gitignore / license（本地已经有了，勾了会冲突）
 
@@ -51,7 +51,7 @@ gh --version                                     # command not found → 没有 
 3. 复制令牌，push 时把令牌当密码：
 
 ```bash
-git remote add origin https://github.com/poker/dsh-composer-keys.git
+git remote add origin https://github.com/poker/dsh-composer-studio.git
 git push -u origin main
 # Username: poker
 # Password: <粘贴 PAT，不是账号密码>
@@ -70,7 +70,7 @@ ssh-keygen -t ed25519 -C "pokereva@163.com" -f ~/.ssh/id_ed25519 -N ""
 cat ~/.ssh/id_ed25519.pub          # 整段贴到 https://github.com/settings/keys
 ssh -T git@github.com              # 出现 "Hi <user>!" 即成功
 
-git remote add origin git@github.com:poker/dsh-composer-keys.git
+git remote add origin git@github.com:poker/dsh-composer-studio.git
 git push -u origin main
 ```
 
@@ -87,24 +87,24 @@ git push -u origin main
 插件市场与 `dsh plugin add` 都支持直接装 tgz：
 
 ```bash
-npm pack                            # 产出 dsh-composer-keys-1.0.0.tgz
+npm pack                            # 产出 dsh-composer-studio-2.0.0.tgz
 ```
 
-把 tgz 传到 <https://github.com/poker/dsh-composer-keys/releases/new>，tag 写 `v1.0.0`。别人就能这样装：
+把 tgz 传到 <https://github.com/poker/dsh-composer-studio/releases/new>，tag 写 `v2.0.0`。别人就能这样装：
 
 ```bash
-dsh plugin --profile <profile> add https://github.com/poker/dsh-composer-keys/releases/download/v1.0.0/dsh-composer-keys-1.0.0.tgz
+dsh plugin --profile <profile> add https://github.com/poker/dsh-composer-studio/releases/download/v2.0.0/dsh-composer-studio-2.0.0.tgz
 ```
 
 或直接从源码装：
 
 ```bash
-dsh plugin --profile <profile> add github:poker/dsh-composer-keys
+dsh plugin --profile <profile> add github:poker/dsh-composer-studio
 ```
 
 ## 6. 发 npm（可选）
 
-需要先解决作用域：`@local/*` 只在本机有意义，发布前把包名改成 `dsh-composer-keys` 或 `@你的用户名/dsh-composer-keys`，并同步改三处引用：
+需要先解决作用域：`@local/*` 只在本机有意义，发布前把包名改成 `dsh-composer-studio` 或 `@你的用户名/dsh-composer-studio`，并同步改三处引用：
 
 - `package.json` 的 `name`
 - `cordis.patch.yml` 的 `name:`

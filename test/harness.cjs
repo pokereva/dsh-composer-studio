@@ -43,6 +43,15 @@ class FakeElement {
     return null;
   }
 
+  /** markdownContinuation 用 parentNode 往上爬，这里保持与浏览器一致。 */
+  get parentNode() {
+    return this.parentElement;
+  }
+
+  get firstChild() {
+    return this.children.length > 0 ? this.children[0] : null;
+  }
+
   querySelector(selector) {
     for (const child of this.children) {
       if (matchesSelector(child, selector)) return child;
@@ -145,11 +154,16 @@ function createEnv(options) {
   const opts = options || {};
   const windowListeners = new Map();
 
+  const execCommands = [];
   const documentStub = {
     head: new FakeElement('head'),
     body: new FakeElement('body'),
     activeElement: null,
     createElement: (tag) => new FakeElement(tag),
+    execCommand: (name, _ui, value) => {
+      execCommands.push({ name, value });
+      return true;
+    },
     querySelector: (selector) => {
       if (!opts.root) return null;
       if (matchesSelector(opts.root, selector)) return opts.root;
@@ -165,6 +179,8 @@ function createEnv(options) {
   }
 
   const windowStub = {
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    getSelection: null,
     addEventListener(type, listener) {
       if (!windowListeners.has(type)) windowListeners.set(type, []);
       windowListeners.get(type).push(listener);
@@ -205,6 +221,7 @@ function createEnv(options) {
     document: documentStub,
     window: windowStub,
     storage,
+    execCommands,
     getApply: () => loaded.factory((name) => {
       if (name === 'react') return reactStub;
       throw new Error(`unexpected require: ${name}`);
@@ -228,10 +245,13 @@ function installPlugin(env) {
       bind: () => (key) => key,
     },
     slots: {
+      // 真的把 factory 跑一遍，模拟槽位物化，这样才能拿到 register 的定义。
       inject(name, factory) {
-        slots.push({ name, factory });
+        slots.push({ name, factory, entries: [] });
+        factory();
       },
       register(definition) {
+        slots[slots.length - 1].entries.push(definition);
         return { definition };
       },
     },
@@ -264,13 +284,39 @@ function createComposer() {
 /* ── 断言 ─────────────────────────────────────────────────────────── */
 
 const results = [];
+const pending = [];
+
 function check(name, fn) {
   try {
-    fn();
+    const outcome = fn();
+    if (outcome !== null && typeof outcome === 'object' && typeof outcome.then === 'function') {
+      const entry = { name, ok: true };
+      results.push(entry);
+      pending.push(outcome.then(
+        () => {},
+        (error) => {
+          entry.ok = false;
+          entry.error = error;
+        },
+      ));
+      return;
+    }
     results.push({ name, ok: true });
   } catch (error) {
     results.push({ name, ok: false, error });
   }
+}
+
+function markdownSettings() {
+  return JSON.stringify({
+    enabled: true,
+    mode: 'markdown',
+    bindings: {
+      newline: { code: 'Enter', alt: false, ctrl: false, meta: false, shift: false },
+      send: null,
+    },
+    blockKeyboardSend: true,
+  });
 }
 
 check('裸 Enter 在输入框里换行，不触发发送', () => {
@@ -376,11 +422,140 @@ check('关掉「拦截所有键盘发送」后 Ctrl + Enter 不再被改写成�
   assert.strictEqual(event.defaultPrevented, false, '关掉后应当放行给 DSH 原来的处理');
 });
 
-check('注册 settings.section 槽位', () => {
+check('总开关关闭后 Enter 完全放行（快捷键复原）', () => {
+  const composer = createComposer();
+  const stored = JSON.stringify({
+    enabled: false,
+    mode: 'default',
+    bindings: {
+      newline: { code: 'Enter', alt: false, ctrl: false, meta: false, shift: false },
+      send: null,
+    },
+    blockKeyboardSend: true,
+  });
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': stored } });
+  installPlugin(env);
+  const plain = keydown(env, { key: 'Enter', code: 'Enter', target: composer.input });
+  assert.strictEqual(plain.defaultPrevented, false, '关闭总开关后连裸 Enter 都不该被拦');
+  assert.strictEqual(composer.input.dispatched.length, 0);
+  const withCtrl = keydown(env, { key: 'Enter', code: 'Enter', ctrlKey: true, target: composer.input });
+  assert.strictEqual(withCtrl.defaultPrevented, false);
+});
+
+check('Markdown 模式 Tab 插入两个空格', () => {
+  const composer = createComposer();
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
+  installPlugin(env);
+  const event = keydown(env, { key: 'Tab', code: 'Tab', target: composer.input });
+  assert.strictEqual(event.defaultPrevented, true);
+  assert.deepStrictEqual(env.execCommands.at(-1), { name: 'insertText', value: '  ' });
+});
+
+check('默认模式下 Tab 不接管', () => {
+  const composer = createComposer();
+  const env = createEnv({ root: composer.card });
+  installPlugin(env);
+  const event = keydown(env, { key: 'Tab', code: 'Tab', target: composer.input });
+  assert.strictEqual(event.defaultPrevented, false);
+  assert.strictEqual(env.execCommands.length, 0);
+});
+
+check('Markdown 模式 Ctrl + 1 / 2 / 3 插入标题', () => {
+  const composer = createComposer();
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
+  installPlugin(env);
+  keydown(env, { key: '1', code: 'Digit1', ctrlKey: true, target: composer.input });
+  assert.strictEqual(env.execCommands.at(-1).value, '# ');
+  keydown(env, { key: '2', code: 'Digit2', ctrlKey: true, target: composer.input });
+  assert.strictEqual(env.execCommands.at(-1).value, '## ');
+  keydown(env, { key: '3', code: 'Digit3', ctrlKey: true, target: composer.input });
+  assert.strictEqual(env.execCommands.at(-1).value, '### ');
+});
+
+check('Markdown 模式 Alt + 数字与反引号插入块标记', () => {
+  const composer = createComposer();
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
+  installPlugin(env);
+  keydown(env, { key: '7', code: 'Digit7', altKey: true, target: composer.input });
+  assert.strictEqual(env.execCommands.at(-1).value, '- ');
+  keydown(env, { key: '8', code: 'Digit8', altKey: true, target: composer.input });
+  assert.strictEqual(env.execCommands.at(-1).value, '1. ');
+  keydown(env, { key: '9', code: 'Digit9', altKey: true, target: composer.input });
+  assert.strictEqual(env.execCommands.at(-1).value, '- [ ] ');
+  keydown(env, { key: '0', code: 'Digit0', altKey: true, target: composer.input });
+  assert.strictEqual(env.execCommands.at(-1).value, '> ');
+  keydown(env, { key: '`', code: 'Backquote', altKey: true, target: composer.input });
+  assert.strictEqual(env.execCommands.at(-1).value, '```\n');
+});
+
+check('Markdown 模式 Enter 后延续列表标记', () => {
+  const composer = createComposer();
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
+  installPlugin(env);
+  const block = new FakeElement('p');
+  block.textContent = '- 第一项';
+  composer.input.appendChild(block);
+  env.window.getSelection = () => ({
+    rangeCount: 1,
+    toString: () => '',
+    getRangeAt: () => ({ startContainer: block }),
+  });
+  const event = keydown(env, { key: 'Enter', code: 'Enter', target: composer.input });
+  assert.strictEqual(event.defaultPrevented, true);
+  assert.strictEqual(composer.send.clicks, 0);
+  // 换行是异步补的：setTimeout(0)。
+  return new Promise((resolve) => setTimeout(resolve, 5)).then(() => {
+    assert.strictEqual(env.execCommands.at(-1).value, '- ');
+  });
+});
+
+check('Markdown 模式有序列表续行递增编号', () => {
+  const composer = createComposer();
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
+  installPlugin(env);
+  const block = new FakeElement('p');
+  block.textContent = '3. 第三项';
+  composer.input.appendChild(block);
+  env.window.getSelection = () => ({
+    rangeCount: 1,
+    toString: () => '',
+    getRangeAt: () => ({ startContainer: block }),
+  });
+  keydown(env, { key: 'Enter', code: 'Enter', target: composer.input });
+  return new Promise((resolve) => setTimeout(resolve, 5)).then(() => {
+    assert.strictEqual(env.execCommands.at(-1).value, '4. ');
+  });
+});
+
+check('Markdown 模式空列表项回车结束列表', () => {
+  const composer = createComposer();
+  const env = createEnv({ root: composer.card, storage: { 'dsh.composer-studio.v1': markdownSettings() } });
+  installPlugin(env);
+  const block = new FakeElement('p');
+  block.textContent = '- ';
+  composer.input.appendChild(block);
+  env.window.getSelection = () => ({
+    rangeCount: 1,
+    toString: () => '',
+    getRangeAt: () => ({ startContainer: block }),
+  });
+  keydown(env, { key: 'Enter', code: 'Enter', target: composer.input });
+  return new Promise((resolve) => setTimeout(resolve, 5)).then(() => {
+    assert.strictEqual(env.execCommands.length, 0, '空条目不该再补标记');
+  });
+});
+
+check('注册 settings.section 与 composer.dock 两个槽位', () => {
   const env = createEnv({ root: null });
   const instance = installPlugin(env);
-  assert.strictEqual(instance.slots.length, 1);
-  assert.strictEqual(instance.slots[0].name, 'settings.section');
+  assert.strictEqual(instance.slots.length, 2);
+  const settings = instance.slots.find((slot) => slot.name === 'settings.section');
+  assert.ok(settings, '设置面板入口');
+  assert.strictEqual(settings.entries[0].id, 'composer-studio');
+  assert.strictEqual(settings.entries[0].order, 14);
+  const dock = instance.slots.find((slot) => slot.name === 'conversation.composer.dock');
+  assert.ok(dock, 'MD 预览挂在输入框下方的 dock 槽');
+  assert.strictEqual(dock.entries[0].id, 'composer-studio-preview');
 });
 
 check('apply 注册了 window 捕获监听与样式', () => {
@@ -397,15 +572,17 @@ check('apply 注册了 window 捕获监听与样式', () => {
 
 /* ── 输出 ─────────────────────────────────────────────────────────── */
 
-let failed = 0;
-for (const result of results) {
-  if (result.ok) {
-    console.log(`  ok   ${result.name}`);
-  } else {
-    failed += 1;
-    console.log(`  FAIL ${result.name}`);
-    console.log(`       ${result.error.message}`);
+Promise.all(pending).then(() => {
+  let failed = 0;
+  for (const result of results) {
+    if (result.ok) {
+      console.log(`  ok   ${result.name}`);
+    } else {
+      failed += 1;
+      console.log(`  FAIL ${result.name}`);
+      console.log(`       ${result.error.message}`);
+    }
   }
-}
-console.log(`\n${results.length - failed}/${results.length} passed`);
-process.exit(failed === 0 ? 0 : 1);
+  console.log(`\n${results.length - failed}/${results.length} passed`);
+  process.exit(failed === 0 ? 0 : 1);
+});

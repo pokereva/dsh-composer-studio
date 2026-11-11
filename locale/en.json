@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Composer keys",
-    "description": "Turns the composer into a real multi-line editor: Enter inserts a line break, sending happens by click, and both gestures can be re-recorded."
+    "title": "Composer Studio",
+    "description": "Turns the composer into a real editor: Enter only inserts a line break, sending happens by click, and an optional Markdown mode adds input helpers plus a live preview. Everything can be switched off in one place."
   }
 }
