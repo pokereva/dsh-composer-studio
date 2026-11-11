@@ -1,6 +1,8 @@
-# @local/dsh-composer-keys
+# dsh-composer-keys
 
 把 DSH 的消息输入框变成真正的文本编辑框：**Enter 只换行，发送只能点按钮**，并且这两条手势可以随手改。
+
+> DSH (DeepSeek Harness) 插件 · [MIT License](./LICENSE) · 零依赖、纯客户端
 
 DSH 内核把 `Enter`、`Shift + Enter`、`Ctrl / Cmd + Enter` 这三组注册成了 *fixed input*（固定输入）——它们会出现在「设置 → 通用 → 快捷键」里，但**只读、不允许改写**。所以「把 Enter 改成换行」没法通过配置实现，只能抢在事件到达内核之前接管。
 

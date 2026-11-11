@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Composer keys",
-    "description": "Turns the composer into a real multi-line editor: Enter inserts a line break, Shift + Enter sends, and both can be re-recorded."
+    "description": "Turns the composer into a real multi-line editor: Enter inserts a line break, sending happens by click, and both gestures can be re-recorded."
   }
 }

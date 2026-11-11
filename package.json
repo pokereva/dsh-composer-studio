@@ -1,7 +1,6 @@
 {
   "name": "@local/dsh-composer-keys",
   "version": "1.0.0",
-  "private": true,
   "description": "Turns the DSH message composer into a real text editor: Enter inserts a line break and sending happens by click. Both gestures can be remapped.",
   "keywords": [
     "deepseek",

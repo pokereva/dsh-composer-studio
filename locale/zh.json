@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "输入框快捷键",
-    "description": "把输入框变成真正的多行编辑器：Enter 插入换行，Shift + Enter 发送，两者都可以重新录制。"
+    "description": "把输入框变成真正的多行编辑器：Enter 插入换行，发送只能点按钮，两条手势都可以重新录制。"
   }
 }
